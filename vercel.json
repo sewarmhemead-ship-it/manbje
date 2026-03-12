@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dashboard/dist",
+  "rewrites": [
+    { "source": "/api", "destination": "/api/nest" },
+    { "source": "/api/:path*", "destination": "/api/nest/:path*" }
+  ],
+  "framework": null
+}

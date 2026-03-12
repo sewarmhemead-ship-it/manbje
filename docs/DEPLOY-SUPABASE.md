@@ -120,19 +120,37 @@
 
 ---
 
+## إنشاء الجداول في Supabase (مهم)
+
+بعد ضبط **DATABASE_URL** (محلياً أو على Render)، أنشئ الجداول مرة واحدة:
+
+**محلياً:**
+```bash
+cd backend
+# تأكد أن .env يحتوي على DATABASE_URL من Supabase
+npm run db:sync
+```
+
+السكربت يزامن المخطط مع القاعدة فيُنشئ كل الجداول (users, patients, appointments, invoices, notifications، إلخ). شغّله **مرة واحدة** بعد ربط Supabase.
+
+**على Render:** أضف متغير البيئة `DATABASE_SYNC=true` لخدمة الباكند ثم انشر مرة واحدة؛ عند التشغيل الأول سينشئ TypeORM الجداول. بعدها يمكنك حذف `DATABASE_SYNC` أو جعلها `false`.
+
+---
+
 ## الربط المحلي مع Supabase (اختياري)
 
 لتشغيل المشروع محلياً مع قاعدة البيانات على Supabase:
 
-1. في جذر المشروع انسخ `backend/.env.example` إلى `backend/.env`.
+1. في مجلد الباكند انسخ `backend/.env.example` إلى `backend/.env`.
 2. ضع في `.env`:
    ```env
-   DATABASE_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+   DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.xxxx.supabase.co:5432/postgres
    JWT_SECRET=سري-محلي
    CORS_ORIGIN=http://localhost:5173
    ```
-3. شغّل الباكند: `cd backend && npm run start:dev`.
-4. شغّل الواجهة: `cd dashboard && npm run dev`.
+3. أنشئ الجداول: `cd backend && npm run db:sync`
+4. شغّل الباكند: `npm run start:dev`.
+5. شغّل الواجهة: `cd dashboard && npm run dev`.
 
 ---
 
