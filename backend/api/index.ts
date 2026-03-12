@@ -38,7 +38,11 @@ export async function bootstrap(): Promise<{
       transformOptions: { enableImplicitConversion: true },
     }),
   );
-  nestApp.enableCors({ origin: process.env.CORS_ORIGIN ?? '*' });
+  nestApp.enableCors({
+    origin: true, // Allow all origins during testing
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
   await nestApp.init();
 
   cachedExpressApp = expressApp;
