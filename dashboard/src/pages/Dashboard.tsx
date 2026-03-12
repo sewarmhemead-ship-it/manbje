@@ -19,7 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { apiGet } from '@/lib/api';
 import type { Appointment } from '@/lib/api';
 import { getTransportRequests } from '@/lib/api-dashboard';
-import { MOCK_APPOINTMENTS, MOCK_DASHBOARD_STATS, MOCK_TRANSPORT_REQUESTS, isDemoMode } from '@/lib/mock-data';
+import { MOCK_APPOINTMENTS, MOCK_DASHBOARD_STATS, isDemoMode } from '@/lib/mock-data';
 
 const todayStart = () => {
   const d = new Date();
