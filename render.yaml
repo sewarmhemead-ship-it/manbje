@@ -1,0 +1,48 @@
+# Render Blueprint — مركز العلاج الطبيعي (PT Center)
+# ربط المستودع من GitHub ثم Deploy باستخدام هذا الملف
+
+databases:
+  - name: manbje-db
+    databaseName: pt_center
+    user: pt_center
+    plan: free
+
+services:
+  # Backend API (NestJS)
+  - type: web
+    name: manbje-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: manbje-db
+          property: connectionString
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        fromService:
+          type: web
+          name: manbje-web
+          property: host
+      # أول نشر: فعّل إنشاء الجداول تلقائياً. بعدها يمكن حذفها من Dashboard
+      - key: DATABASE_SYNC
+        value: "true"
+
+  # Frontend (React/Vite) — Static Site
+  - type: web
+    name: manbje-web
+    runtime: static
+    rootDir: dashboard
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: manbje-api
+          property: host

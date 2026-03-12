@@ -40,14 +40,20 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     TypeOrmModule.forRootAsync({
-      useFactory: () => ({
-        type: 'postgres',
-        host: process.env.DB_HOST ?? 'localhost',
-        port: parseInt(process.env.DB_PORT ?? '5432', 10),
-        username: process.env.DB_USER ?? 'postgres',
-        password: process.env.DB_PASSWORD ?? 'postgres',
-        database: process.env.DB_NAME ?? 'pt_center',
-        entities: [
+      useFactory: () => {
+        const databaseUrl = process.env.DATABASE_URL;
+        return {
+          type: 'postgres',
+          ...(databaseUrl
+            ? { url: databaseUrl }
+            : {
+                host: process.env.DB_HOST ?? 'localhost',
+                port: parseInt(process.env.DB_PORT ?? '5432', 10),
+                username: process.env.DB_USER ?? 'postgres',
+                password: process.env.DB_PASSWORD ?? 'postgres',
+                database: process.env.DB_NAME ?? 'pt_center',
+              }),
+          entities: [
           User,
           Patient,
           Room,
@@ -67,9 +73,11 @@ TransportVehicle,
         Payment,
         Notification,
         ],
-        synchronize: process.env.NODE_ENV !== 'production',
+        synchronize: process.env.NODE_ENV !== 'production' || process.env.DATABASE_SYNC === 'true',
         logging: process.env.NODE_ENV === 'development',
-      }),
+        ssl: databaseUrl ? { rejectUnauthorized: false } : false,
+        };
+      },
     }),
     AuthModule,
     UsersModule,
