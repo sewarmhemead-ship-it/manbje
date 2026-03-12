@@ -1,0 +1,42 @@
+# Render Blueprint مع Supabase — مركز العلاج الطبيعي (PT Center)
+# قاعدة البيانات على Supabase، والباكند + الواجهة على Render
+# استخدم هذا الملف عند النشر من Render بعد إنشاء مشروع Supabase
+
+services:
+  # Backend API (NestJS) — يتصل بقاعدة Supabase
+  - type: web
+    name: manbje-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      # الصق من Supabase: Project Settings → Database → Connection string (URI)
+      - key: DATABASE_URL
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        fromService:
+          type: web
+          name: manbje-web
+          property: host
+      # أول نشر: فعّل لإنشاء الجداول. بعدها يمكن حذفه
+      - key: DATABASE_SYNC
+        value: "true"
+
+  # Frontend (React/Vite) — Static Site
+  - type: web
+    name: manbje-web
+    runtime: static
+    rootDir: dashboard
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: manbje-api
+          property: host
