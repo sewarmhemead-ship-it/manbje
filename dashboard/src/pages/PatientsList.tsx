@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/lib/toast';
 import { apiGet, apiPost } from '@/lib/api';
+import { MOCK_PATIENTS, MOCK_PATIENT_STATS, MOCK_USERS_DOCTORS, isDemoMode } from '@/lib/mock-data';
 
 const BG = '#06080e';
 const SURFACE = '#0b0f1a';
@@ -84,6 +85,18 @@ export function PatientsList() {
 
   const fetchList = useCallback(async () => {
     setLoading(true);
+    if (isDemoMode()) {
+      let data = MOCK_PATIENTS as unknown as Patient[];
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        data = data.filter((p) => (p.nameAr ?? '').toLowerCase().includes(q) || (p.phone ?? '').includes(q));
+      }
+      const start = (page - 1) * limit;
+      const paginated = data.slice(start, start + limit);
+      setListData({ data: paginated, total: data.length });
+      setLoading(false);
+      return;
+    }
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.set('search', search.trim());
@@ -105,6 +118,10 @@ export function PatientsList() {
   }, [search, page, limit]);
 
   const fetchStats = useCallback(async () => {
+    if (isDemoMode()) {
+      setStats(MOCK_PATIENT_STATS);
+      return;
+    }
     try {
       const s = await apiGet<{ total: number; activeThisMonth: number; newThisWeek: number }>('/patients/stats');
       setStats(s ?? { total: 0, activeThisMonth: 0, newThisWeek: 0 });
@@ -496,6 +513,10 @@ function NewPatientModal({
   const [doctors, setDoctors] = useState<{ id: string; nameAr?: string | null; nameEn?: string | null }[]>([]);
 
   useEffect(() => {
+    if (isDemoMode()) {
+      setDoctors(MOCK_USERS_DOCTORS as { id: string; nameAr?: string | null; nameEn?: string | null }[]);
+      return;
+    }
     apiGet<{ id: string; nameAr?: string | null; nameEn?: string | null; role?: string }[]>('/users')
       .then((r) => setDoctors(Array.isArray(r) ? r.filter((u) => u.role === 'doctor') : []))
       .catch(() => setDoctors([]));
@@ -513,6 +534,11 @@ function NewPatientModal({
     if (!validate()) return;
     setSubmitting(true);
     try {
+      if (isDemoMode()) {
+        onSuccess();
+        setSubmitting(false);
+        return;
+      }
       await apiPost('/patients', {
         nameAr: nameAr.trim(),
         nameEn: nameEn.trim() || undefined,

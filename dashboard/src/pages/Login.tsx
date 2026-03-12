@@ -74,6 +74,9 @@ export function Login() {
                 'تسجيل الدخول'
               )}
             </Button>
+            {import.meta.env.VITE_DEMO_MODE === 'true' && (
+              <p className="text-center text-xs text-muted-foreground">وضع العرض التجريبي — أي بيانات تدخل ستمر مباشرة</p>
+            )}
           </form>
         </CardContent>
       </Card>

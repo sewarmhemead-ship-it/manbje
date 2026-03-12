@@ -17,6 +17,16 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiGet } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import {
+  MOCK_PATIENTS,
+  MOCK_APPOINTMENTS,
+  MOCK_PATIENT_STATS,
+  MOCK_TRANSPORT_REQUESTS,
+  MOCK_VEHICLES,
+  MOCK_USERS_DOCTORS,
+  MOCK_REPORTS,
+  isDemoMode,
+} from '@/lib/mock-data';
 
 const BG = '#06080e';
 const SURFACE = '#0b0f1a';
@@ -122,6 +132,23 @@ export function Reports() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    if (isDemoMode()) {
+      setAppointments(MOCK_APPOINTMENTS as unknown as Appointment[]);
+      setSessions([]);
+      setPatients(MOCK_PATIENTS as unknown as Patient[]);
+      setPatientsStats(MOCK_PATIENT_STATS);
+      setTransportRequests(MOCK_TRANSPORT_REQUESTS as unknown as TransportRequest[]);
+      setVehicles(MOCK_VEHICLES as { id: string; plateNumber?: string; status?: string }[]);
+      setDoctors(MOCK_USERS_DOCTORS as unknown as User[]);
+      setReportDashboardStats(MOCK_REPORTS.dashboardStats);
+      setReportSessionsByDay(MOCK_REPORTS.sessionsByDay);
+      setReportHeatmap(MOCK_REPORTS.heatmap);
+      setReportDoctorPerf(MOCK_REPORTS.doctorPerf);
+      setReportPatientGrowth(MOCK_REPORTS.patientGrowth);
+      setReportTransportStats(MOCK_REPORTS.transportStats);
+      setLoading(false);
+      return;
+    }
     const isAdmin = user?.role === 'admin';
     const doctorId = user?.id ?? '';
     const base = [

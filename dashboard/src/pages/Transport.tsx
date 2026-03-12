@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import { MOCK_TRANSPORT_REQUESTS, MOCK_VEHICLES, MOCK_DRIVERS, isDemoMode } from '@/lib/mock-data';
 
 const STATUS_FILTER = ['all', 'en_route', 'requested', 'assigned', 'arrived_at_center', 'completed'] as const;
 const today = new Date().toISOString().slice(0, 10);
@@ -22,6 +23,13 @@ export function Transport() {
   const [newVehicleOpen, setNewVehicleOpen] = useState(false);
 
   const load = useCallback(() => {
+    if (isDemoMode()) {
+      setRequests(MOCK_TRANSPORT_REQUESTS as unknown[]);
+      setVehicles(MOCK_VEHICLES as unknown[]);
+      setDrivers(MOCK_DRIVERS as unknown[]);
+      setLoading(false);
+      return;
+    }
     Promise.all([
       apiGet<unknown[]>('/transport/requests'),
       apiGet<unknown[]>('/transport/vehicles'),
@@ -56,6 +64,10 @@ export function Transport() {
   const selected = requests.find((r: unknown) => (r as { id: string }).id === selectedId) as Record<string, unknown> | undefined;
 
   const updateStatus = async (id: string, status: string) => {
+    if (isDemoMode()) {
+      toast('وضع العرض التجريبي — التعديل وهمي');
+      return;
+    }
     try {
       await apiPatch(`/transport/requests/${id}/status`, { status });
       toast('Status updated');
@@ -66,6 +78,11 @@ export function Transport() {
   };
 
   const assignDriver = async (driverId: string, vehicleId: string) => {
+    if (isDemoMode()) {
+      toast('وضع العرض التجريبي — التعديل وهمي');
+      setAssignOpen(false);
+      return;
+    }
     if (!selectedId) return;
     try {
       await apiPatch(`/transport/requests/${selectedId}/assign`, { driverId, vehicleId });

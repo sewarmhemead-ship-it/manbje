@@ -29,6 +29,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, user: null, ready: true }));
       return;
     }
+    if (t === 'demo-token') {
+      const fakeUser: User = {
+        id: 'demo-user-id',
+        email: 'demo@example.com',
+        role: 'admin',
+        nameAr: 'عرض تجريبي',
+        nameEn: 'Demo User',
+        phone: null,
+        isActive: true,
+      };
+      setState((s) => ({ ...s, user: fakeUser, token: t, ready: true }));
+      return;
+    }
     try {
       const user = await apiGet<User>('/auth/me');
       setState((s) => ({ ...s, user, token: t, ready: true }));
@@ -39,6 +52,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    const isDemo = import.meta.env.VITE_DEMO_MODE === 'true';
+    if (isDemo) {
+      const fakeToken = 'demo-token';
+      const fakeUser: User = {
+        id: 'demo-user-id',
+        email: email || 'demo@example.com',
+        role: 'admin',
+        nameAr: 'عرض تجريبي',
+        nameEn: 'Demo User',
+        phone: null,
+        isActive: true,
+      };
+      localStorage.setItem('token', fakeToken);
+      setState({ user: fakeUser, token: fakeToken, ready: true });
+      return;
+    }
     const { user, accessToken } = await apiPost<{ user: User; accessToken: string }>(
       '/auth/login',
       { email, password }

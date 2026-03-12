@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiGet, apiPost, apiPatch } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import { MOCK_APPOINTMENTS, MOCK_USERS_DOCTORS, isDemoMode } from '@/lib/mock-data';
 import type { Appointment, User as ApiUser } from '@/lib/api';
 
 const ACCENT = '#22d3ee';
@@ -70,6 +71,11 @@ export function AppointmentsCalendar() {
 
   const fetchAppointments = useCallback(async () => {
     setLoading(true);
+    if (isDemoMode()) {
+      setAppointments(MOCK_APPOINTMENTS as Appointment[]);
+      setLoading(false);
+      return;
+    }
     try {
       if (isAdmin) {
         const data = await apiGet<Appointment[]>('/appointments?startDate=' + startStr + '&endDate=' + endStr);
@@ -92,6 +98,10 @@ export function AppointmentsCalendar() {
   }, [fetchAppointments]);
 
   useEffect(() => {
+    if (isDemoMode()) {
+      setDoctors(MOCK_USERS_DOCTORS as ApiUser[]);
+      return;
+    }
     if (!isAdmin) {
       if (user?.id) setDoctors([user as ApiUser]);
       return;

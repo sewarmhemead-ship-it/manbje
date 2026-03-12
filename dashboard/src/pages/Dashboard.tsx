@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { apiGet } from '@/lib/api';
 import type { Appointment } from '@/lib/api';
 import { getTransportRequests } from '@/lib/api-dashboard';
+import { MOCK_APPOINTMENTS, MOCK_DASHBOARD_STATS, MOCK_TRANSPORT_REQUESTS, isDemoMode } from '@/lib/mock-data';
 
 const todayStart = () => {
   const d = new Date();
@@ -46,6 +47,12 @@ export function Dashboard() {
   const [lastUpdateSeconds, setLastUpdateSeconds] = useState(0);
 
   const load = useCallback(async () => {
+    if (isDemoMode()) {
+      setStats(MOCK_DASHBOARD_STATS);
+      setLiveAppointments(MOCK_APPOINTMENTS as Appointment[]);
+      setLoading(false);
+      return;
+    }
     try {
       const doctorId = user?.role === 'admin' ? undefined : user?.id;
       const start = todayStart();
