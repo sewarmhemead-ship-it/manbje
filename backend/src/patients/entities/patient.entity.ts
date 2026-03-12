@@ -71,6 +71,9 @@ export class Patient {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
+  @Column({ name: 'push_token', type: 'text', nullable: true })
+  pushToken: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "مركز العلاج",
+    "slug": "physiocore-patient",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "primaryColor": "#22d3ee",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#06080e"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#06080e",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      }
+    },
+    "extra": {
+      "supportsRTL": true
+    }
+  }
+}

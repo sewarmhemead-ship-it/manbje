@@ -74,14 +74,22 @@ export function TopBar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border bg-background/80 px-6 backdrop-blur-xl">
+    <header
+      className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b px-6 backdrop-blur-xl"
+      style={{
+        background: 'rgba(6,8,14,0.95)',
+        borderColor: 'rgba(255,255,255,0.06)',
+        backdropFilter: 'blur(20px)',
+      }}
+    >
       <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4b5875]" />
         <Input
           placeholder="بحث عام..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className={cn('h-10 pl-9 rounded-xl border-border bg-muted/50')}
+          className={cn('h-10 pl-9 rounded-xl')}
+          style={{ background: '#101622', border: '1px solid rgba(255,255,255,0.1)', color: '#dde6f5' }}
         />
       </div>
       <div className="flex items-center gap-3">
@@ -104,23 +112,24 @@ export function TopBar() {
             {notifOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                <div className="absolute left-0 top-full z-50 mt-1 w-80 max-h-[320px] overflow-y-auto rounded-xl border border-border bg-card shadow-xl">
-                  <div className="border-b border-border px-3 py-2 text-sm font-medium">الإشعارات</div>
+                <div className="absolute left-0 top-full z-50 mt-1 w-80 max-h-[320px] overflow-y-auto rounded-xl border shadow-xl" style={{ background: '#0b0f1a', borderColor: 'rgba(255,255,255,0.06)' }}>
+                  <div className="border-b px-3 py-2 text-sm font-medium text-[#dde6f5]" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>الإشعارات</div>
                   {notifications.length === 0 ? (
-                    <p className="p-4 text-center text-sm text-muted-foreground">لا توجد إشعارات</p>
+                    <p className="p-4 text-center text-sm text-[#4b5875]">لا توجد إشعارات</p>
                   ) : (
                     notifications.map((n) => (
                       <button
                         key={n.id}
                         type="button"
                         className={cn(
-                          'w-full border-b border-border/50 px-3 py-2 text-right text-sm transition-colors hover:bg-muted/50',
+                          'w-full border-b px-3 py-2 text-right text-sm transition-colors',
                           !n.isRead && 'bg-primary/5',
                         )}
+                        style={{ borderColor: 'rgba(255,255,255,0.06)', color: '#dde6f5' }}
                         onClick={() => markReadAndGo(n)}
                       >
-                        <p className="font-medium">{n.title}</p>
-                        <p className="line-clamp-2 text-muted-foreground">{n.message}</p>
+                        <p className="font-medium text-[#dde6f5]">{n.title}</p>
+                        <p className="line-clamp-2 text-[#4b5875]">{n.message}</p>
                       </button>
                     ))
                   )}
@@ -130,14 +139,14 @@ export function TopBar() {
           </div>
         )}
         {!mounted ? (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <Loader2 className="h-5 w-5 animate-spin text-[#4b5875]" />
         ) : user ? (
           <>
             <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium">
+              <p className="text-sm font-medium text-[#dde6f5]">
                 {user.nameAr ?? user.nameEn ?? user.email}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-[#4b5875]">
                 {roleLabels[user.role] ?? user.role}
               </p>
             </div>

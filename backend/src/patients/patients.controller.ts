@@ -125,6 +125,21 @@ export class PatientsController {
     return this.patientsService.findOne(id);
   }
 
+  @Patch(':id/push-token')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.PATIENT)
+  async updatePushToken(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: { token: string; platform: 'ios' | 'android' },
+    @CurrentUser() user: User,
+  ) {
+    const myPatient = await this.patientsService.findByUserId(user.id);
+    if (!myPatient || myPatient.id !== id) {
+      throw new ForbiddenException('You can only update your own push token');
+    }
+    return this.patientsService.updatePushToken(id, dto.token);
+  }
+
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.DOCTOR)

@@ -7,6 +7,7 @@ export const MOCK_PATIENTS = [
   {
     id: 'mock-patient-1',
     nameAr: 'أحمد محمد العلي',
+    recoveryScore: 72,
     nameEn: 'Ahmed Mohammed',
     birthDate: '1985-03-15',
     gender: 'ذكر',
@@ -22,6 +23,7 @@ export const MOCK_PATIENTS = [
   {
     id: 'mock-patient-2',
     nameAr: 'فاطمة حسن',
+    recoveryScore: 55,
     nameEn: 'Fatima Hassan',
     birthDate: '1990-07-22',
     gender: 'أنثى',
@@ -37,6 +39,7 @@ export const MOCK_PATIENTS = [
   {
     id: 'mock-patient-3',
     nameAr: 'خالد عبدالله',
+    recoveryScore: 38,
     nameEn: 'Khalid Abdullah',
     birthDate: '1978-11-05',
     gender: 'ذكر',

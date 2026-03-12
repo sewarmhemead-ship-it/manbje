@@ -26,6 +26,7 @@ import { Invoice } from '../billing/entities/invoice.entity';
 import { InvoiceItem } from '../billing/entities/invoice-item.entity';
 import { Payment } from '../billing/entities/payment.entity';
 import { Notification } from '../notifications/entities/notification.entity';
+import { OutboundNotification } from '../notifications/entities/outbound-notification.entity';
 
 config({ path: resolve(__dirname, '../../.env') });
 
@@ -65,6 +66,7 @@ const dataSource = new DataSource({
     InvoiceItem,
     Payment,
     Notification,
+    OutboundNotification,
   ],
   synchronize: true,
   logging: true,

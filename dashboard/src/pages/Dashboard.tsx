@@ -14,12 +14,12 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiGet } from '@/lib/api';
 import type { Appointment } from '@/lib/api';
 import { getTransportRequests } from '@/lib/api-dashboard';
 import { MOCK_APPOINTMENTS, MOCK_DASHBOARD_STATS, isDemoMode } from '@/lib/mock-data';
+import { getStatusLabel, getStatusBadgeStyle } from '@/lib/statusLabels';
 
 const todayStart = () => {
   const d = new Date();
@@ -116,14 +116,6 @@ export function Dashboard() {
     return () => clearInterval(t);
   }, []);
 
-  const quickActions = [
-    { label: 'New Appointment', icon: CalendarPlus, path: '/appointments?new=1' },
-    { label: 'Add Patient', icon: UserPlus, path: '/patients?new=1' },
-    { label: 'Assign Transport', icon: Car, path: '/transport' },
-    { label: 'Upload X-Ray', icon: FileImage, path: '/patients' },
-    { label: 'View Reports', icon: FileText, path: '/reports' },
-  ];
-
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -132,89 +124,85 @@ export function Dashboard() {
     );
   }
 
+  const cardStyle = { background: '#0b0f1a', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px' };
+  const textMuted = { color: '#4b5875' };
+  const textMain = { color: '#dde6f5' };
+
   return (
-    <div className="space-y-8 transition-opacity duration-300">
+    <div className="space-y-8 transition-opacity duration-300" style={{ background: '#06080e' }}>
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Command Center</h1>
-        <p className="mt-1 text-muted-foreground">
+        <h1 className="text-3xl font-bold tracking-tight" style={textMain}>لوحة التحكم</h1>
+        <p className="mt-1" style={textMuted}>
           نظرة عامة على النشاط والمواعيد والنقل
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md">
+        <Card className="overflow-hidden transition-all duration-200" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Today's Appointments
-            </CardTitle>
-            <Calendar className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium" style={textMuted}>مواعيد اليوم</CardTitle>
+            <Calendar className="h-5 w-5" style={textMuted} />
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{stats.todayAppointments}</p>
+            <p className="text-3xl font-bold" style={textMain}>{stats.todayAppointments}</p>
           </CardContent>
         </Card>
-        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md">
+        <Card className="overflow-hidden transition-all duration-200" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Patients in Transit
-            </CardTitle>
-            <Truck className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium" style={textMuted}>قيد النقل</CardTitle>
+            <Truck className="h-5 w-5" style={textMuted} />
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{stats.inTransit}</p>
+            <p className="text-3xl font-bold" style={textMain}>{stats.inTransit}</p>
           </CardContent>
         </Card>
-        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md">
+        <Card className="overflow-hidden transition-all duration-200" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Active Sessions
-            </CardTitle>
-            <Activity className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium" style={textMuted}>جلسات نشطة</CardTitle>
+            <Activity className="h-5 w-5" style={textMuted} />
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{stats.activeSessions}</p>
+            <p className="text-3xl font-bold" style={textMain}>{stats.activeSessions}</p>
           </CardContent>
         </Card>
-        <Card className="overflow-hidden transition-all duration-200 hover:shadow-md">
+        <Card className="overflow-hidden transition-all duration-200" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Weekly Revenue
-            </CardTitle>
-            <DollarSign className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium" style={textMuted}>إيرادات الأسبوع</CardTitle>
+            <DollarSign className="h-5 w-5" style={textMuted} />
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold">{stats.weeklyRevenue}</p>
+            <p className="text-3xl font-bold" style={textMain}>{stats.weeklyRevenue}</p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Live Status</CardTitle>
-              <p className="text-sm text-muted-foreground">
+              <CardTitle style={textMain}>الحالة المباشرة</CardTitle>
+              <p className="text-sm" style={textMuted}>
                 المرضى القادمون اليوم — نقل المركز أو ذاتي
               </p>
             </div>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs" style={textMuted}>
               آخر تحديث: {lastUpdateSeconds} ثانية
             </span>
           </CardHeader>
           <CardContent>
             {liveAppointments.length === 0 ? (
-              <p className="py-8 text-center text-muted-foreground">
-                No appointments today
+              <p className="py-8 text-center" style={textMuted}>
+                لا توجد مواعيد اليوم
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-border">
+              <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="px-4 py-3 text-left font-medium">Patient</th>
-                      <th className="px-4 py-3 text-left font-medium">Time</th>
-                      <th className="px-4 py-3 text-left font-medium">Arrival</th>
-                      <th className="px-4 py-3 text-left font-medium">Status</th>
+                    <tr className="border-b" style={{ borderColor: 'rgba(255,255,255,0.06)', ...textMuted }}>
+                      <th className="px-4 py-3 text-left font-medium">المريض</th>
+                      <th className="px-4 py-3 text-left font-medium">الوقت</th>
+                      <th className="px-4 py-3 text-left font-medium">الوصول</th>
+                      <th className="px-4 py-3 text-left font-medium">الحالة</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -235,9 +223,10 @@ export function Dashboard() {
                       return (
                         <tr
                           key={a.id}
-                          className={`border-b border-border/50 transition-colors hover:bg-muted/30 ${borderByStatus}`}
+                          className={`border-b transition-colors ${borderByStatus}`}
+                          style={{ borderColor: 'rgba(255,255,255,0.06)' }}
                         >
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3" style={textMain}>
                             <div>
                               {a.patient?.nameAr ?? a.patientId}
                               {tr && (tr.vehicle?.plateNumber || tr.driver?.user?.nameAr) && (
@@ -250,7 +239,7 @@ export function Dashboard() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">
+                          <td className="px-4 py-3" style={textMuted}>
                             {new Date(a.startTime).toLocaleTimeString('ar', {
                               hour: '2-digit',
                               minute: '2-digit',
@@ -277,7 +266,12 @@ export function Dashboard() {
                                   aria-hidden
                                 />
                               )}
-                              <Badge variant="outline">{a.status}</Badge>
+                              <span
+                                className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
+                                style={getStatusBadgeStyle(a.status)}
+                              >
+                                {getStatusLabel(a.status, 'appointment')}
+                              </span>
                             </span>
                           </td>
                         </tr>
@@ -290,16 +284,22 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card style={cardStyle}>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+            <CardTitle style={textMain}>إجراءات سريعة</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {quickActions.map(({ label, icon: Icon, path }) => (
+            {[
+              { label: 'موعد جديد', icon: CalendarPlus, path: '/appointments?new=1' },
+              { label: 'إضافة مريض', icon: UserPlus, path: '/patients?new=1' },
+              { label: 'تعيين نقل', icon: Car, path: '/transport' },
+              { label: 'رفع أشعة', icon: FileImage, path: '/patients' },
+              { label: 'التقارير', icon: FileText, path: '/reports' },
+            ].map(({ label, icon: Icon, path }) => (
               <Button
                 key={path}
                 variant="outline"
-                className="w-full justify-start gap-3 rounded-xl"
+                className="w-full justify-start gap-3 rounded-xl border-cyan-500/30 text-cyan-400"
                 onClick={() => navigate(path)}
               >
                 <Icon className="h-5 w-5" />

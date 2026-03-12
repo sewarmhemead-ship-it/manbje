@@ -66,6 +66,14 @@ export class UsersService {
     return this.usersRepo.findOne({ where: { email: email.toLowerCase() } });
   }
 
+  async findByPhone(phone: string): Promise<User | null> {
+    const normalized = phone.replace(/\s/g, '').trim();
+    const withPlus = normalized.startsWith('+') ? normalized : '+' + normalized.replace(/\D/g, '');
+    return this.usersRepo.findOne({
+      where: [{ phone: normalized }, { phone: withPlus }],
+    });
+  }
+
   async findById(id: string): Promise<User | null> {
     return this.usersRepo.findOne({ where: { id } });
   }

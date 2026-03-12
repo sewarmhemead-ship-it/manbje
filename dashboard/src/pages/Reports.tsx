@@ -1,32 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { apiGet } from '@/lib/api';
-import { useToast } from '@/lib/toast';
-import {
-  MOCK_PATIENTS,
-  MOCK_APPOINTMENTS,
-  MOCK_PATIENT_STATS,
-  MOCK_TRANSPORT_REQUESTS,
-  MOCK_VEHICLES,
-  MOCK_USERS_DOCTORS,
-  MOCK_REPORTS,
-  isDemoMode,
-} from '@/lib/mock-data';
+import { STATUS_COLORS, getStatusLabel } from '@/lib/statusLabels';
+import { isDemoMode, MOCK_APPOINTMENTS, MOCK_PATIENTS, MOCK_TRANSPORT_REQUESTS } from '@/lib/mock-data';
 
 const BG = '#06080e';
 const SURFACE = '#0b0f1a';
@@ -36,25 +12,25 @@ const GREEN = '#34d399';
 const AMBER = '#fbbf24';
 const RED = '#f87171';
 const PURPLE = '#a78bfa';
-const TOOLTIP_BG = '#1a2035';
-const AXIS_FILL = '#94a3b8';
 const DAY_NAMES_AR = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
 
 function toDateStr(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-function startOfMonth(d: Date) {
-  const x = new Date(d);
-  x.setDate(1);
-  x.setHours(0, 0, 0, 0);
-  return toDateStr(x);
-}
+type DateRangeKey = 'week' | 'month' | '3months' | 'custom';
 
-function endOfMonth(d: Date) {
-  const x = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  x.setHours(23, 59, 59, 999);
-  return toDateStr(x);
+function getRangeForKey(key: DateRangeKey): { start: string; end: string } {
+  const end = new Date();
+  const start = new Date();
+  if (key === 'week') {
+    start.setDate(start.getDate() - 6);
+  } else if (key === 'month') {
+    start.setMonth(start.getMonth() - 1);
+  } else if (key === '3months') {
+    start.setMonth(start.getMonth() - 3);
+  }
+  return { start: toDateStr(start), end: toDateStr(end) };
 }
 
 interface Appointment {
@@ -63,241 +39,496 @@ interface Appointment {
   status: string;
   doctorId?: string;
   patientId?: string;
+  doctor?: { id: string; nameAr?: string | null };
   patient?: { nameAr?: string };
-  doctor?: { nameAr?: string };
-}
-interface ClinicalSession {
-  id: string;
-  recoveryScore: number | null;
-  appointment?: { startTime: string; patient?: { nameAr?: string }; doctor?: { nameAr?: string } };
 }
 interface Patient {
   id: string;
   nameAr: string;
-  diagnosis?: string | null;
-  createdAt: string;
-  assignedDoctorId?: string | null;
+  recoveryScore?: number | null;
+  createdAt?: string;
 }
 interface TransportRequest {
   id: string;
   status: string;
   mobilityNeed?: string | null;
   createdAt: string;
-  vehicle?: { plateNumber?: string };
-  driver?: { user?: { nameAr?: string } };
 }
-interface User {
-  id: string;
-  nameAr: string | null;
-  role: string;
+interface RecoveryPoint {
+  date: string;
+  recoveryScore: number;
 }
 
 export function Reports() {
-  const { user } = useAuth();
-  const toast = useToast();
-  const [tab, setTab] = useState('overview');
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 1);
-    return startOfMonth(d);
-  });
-  const [dateTo, setDateTo] = useState(() => endOfMonth(new Date()));
+  const navigate = useNavigate();
+  const [dateRangeKey, setDateRangeKey] = useState<DateRangeKey>('month');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [sessions, setSessions] = useState<ClinicalSession[]>([]);
+  const [prevAppointments, setPrevAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [patientsStats, setPatientsStats] = useState<{ total: number; activeThisMonth: number; newThisWeek: number }>({ total: 0, activeThisMonth: 0, newThisWeek: 0 });
-  const [transportRequests, setTransportRequests] = useState<TransportRequest[]>([]);
-  const [vehicles, setVehicles] = useState<{ id: string; plateNumber?: string; status?: string }[]>([]);
-  const [doctors, setDoctors] = useState<User[]>([]);
+  const [transport, setTransport] = useState<TransportRequest[]>([]);
+  const [recoveryCurves, setRecoveryCurves] = useState<Record<string, RecoveryPoint[]>>({});
 
-  const [reportDashboardStats, setReportDashboardStats] = useState<{
-    totalSessions: number;
-    avgRecovery: number;
-    attendanceRate: number;
-    cancellations: number;
-    newPatients: number;
-    revenue: number;
-  } | null>(null);
-  const [reportSessionsByDay, setReportSessionsByDay] = useState<{ date: string; count: number }[] | null>(null);
-  const [reportHeatmap, setReportHeatmap] = useState<{ dayOfWeek: number; hour: number; count: number }[] | null>(null);
-  const [reportDoctorPerf, setReportDoctorPerf] = useState<{ doctorId: string; doctorName: string; sessionsCount: number; avgRecovery: number; attendanceRate: number }[] | null>(null);
-  const [reportPatientGrowth, setReportPatientGrowth] = useState<{ month: string; newPatients: number }[] | null>(null);
-  const [reportTransportStats, setReportTransportStats] = useState<{
-    totalTrips: number;
-    todayTrips: number;
-    byMobilityNeed: { type: string; count: number }[];
-    byVehicle: { vehicleId: string; plate: string; tripCount: number }[];
-  } | null>(null);
+  const range = dateRangeKey === 'custom' ? { start: customFrom, end: customTo } : getRangeForKey(dateRangeKey);
+  const startStr = dateRangeKey === 'custom' ? customFrom : range.start;
+  const endStr = dateRangeKey === 'custom' ? customTo : range.end;
 
-  const fetchAll = useCallback(async () => {
+  const fetchData = useCallback(async () => {
+    if (dateRangeKey === 'custom' && (!customFrom || !customTo)) return;
     setLoading(true);
-    if (isDemoMode()) {
-      setAppointments(MOCK_APPOINTMENTS as unknown as Appointment[]);
-      setSessions([]);
-      setPatients(MOCK_PATIENTS as unknown as Patient[]);
-      setPatientsStats(MOCK_PATIENT_STATS);
-      setTransportRequests(MOCK_TRANSPORT_REQUESTS as unknown as TransportRequest[]);
-      setVehicles(MOCK_VEHICLES as { id: string; plateNumber?: string; status?: string }[]);
-      setDoctors(MOCK_USERS_DOCTORS as unknown as User[]);
-      setReportDashboardStats(MOCK_REPORTS.dashboardStats);
-      setReportSessionsByDay(MOCK_REPORTS.sessionsByDay);
-      setReportHeatmap(MOCK_REPORTS.heatmap);
-      setReportDoctorPerf(MOCK_REPORTS.doctorPerf);
-      setReportPatientGrowth(MOCK_REPORTS.patientGrowth);
-      setReportTransportStats(MOCK_REPORTS.transportStats);
-      setLoading(false);
-      return;
-    }
-    const isAdmin = user?.role === 'admin';
-    const doctorId = user?.id ?? '';
-    const base = [
-      isAdmin
-        ? apiGet<Appointment[]>(`/appointments?startDate=${dateFrom}&endDate=${dateTo}`)
-        : apiGet<Appointment[]>(`/appointments/doctor/${doctorId}?startDate=${dateFrom}&endDate=${dateTo}`),
-      apiGet<ClinicalSession[]>(`/clinical-sessions?startDate=${dateFrom}&endDate=${dateTo}`).catch(() => []),
-      apiGet<Patient[]>('/patients').catch(() => []),
-      apiGet<{ total: number; activeThisMonth: number; newThisWeek: number }>('/patients/stats').catch(() => ({ total: 0, activeThisMonth: 0, newThisWeek: 0 })),
-      apiGet<TransportRequest[]>('/transport/requests').catch(() => []),
-      apiGet<{ id: string; plateNumber?: string; status?: string }[]>('/transport/vehicles').catch(() => []),
-      apiGet<User[]>('/users').catch(() => []),
-    ];
-    const reportCalls = isAdmin
-      ? [
-          apiGet<{ totalSessions: number; avgRecovery: number; attendanceRate: number; cancellations: number; newPatients: number; revenue: number }>(
-            `/reports/dashboard-stats?startDate=${dateFrom}&endDate=${dateTo}`,
-          ).catch(() => null),
-          apiGet<{ date: string; count: number }[]>(`/reports/sessions-by-day?startDate=${dateFrom}&endDate=${dateTo}`).catch(() => null),
-          apiGet<{ dayOfWeek: number; hour: number; count: number }[]>(`/reports/heatmap?startDate=${dateFrom}&endDate=${dateTo}`).catch(() => null),
-          apiGet<{ doctorId: string; doctorName: string; sessionsCount: number; avgRecovery: number; attendanceRate: number }[]>(
-            `/reports/doctor-performance?startDate=${dateFrom}&endDate=${dateTo}`,
-          ).catch(() => null),
-          apiGet<{ month: string; newPatients: number }[]>('/reports/patient-growth').catch(() => null),
-          apiGet<{ totalTrips: number; todayTrips: number; byMobilityNeed: { type: string; count: number }[]; byVehicle: { vehicleId: string; plate: string; tripCount: number }[] }>(
-            `/reports/transport-stats?startDate=${dateFrom}&endDate=${dateTo}`,
-          ).catch(() => null),
-        ]
-      : [];
+    setError(null);
+    const start = dateRangeKey === 'custom' ? customFrom : range.start;
+    const end = dateRangeKey === 'custom' ? customTo : range.end;
+    const prevStart = new Date(start);
+    const prevEnd = new Date(end);
+    const days = Math.ceil((prevEnd.getTime() - prevStart.getTime()) / 86400000) || 1;
+    prevEnd.setTime(prevStart.getTime() - 86400000);
+    prevStart.setTime(prevEnd.getTime() - (days - 1) * 86400000);
+    const prevStartStr = toDateStr(prevStart);
+    const prevEndStr = toDateStr(prevEnd);
+
     try {
-      const baseResults = await Promise.all(base);
-      setAppointments(Array.isArray(baseResults[0]) ? (baseResults[0] as Appointment[]) : []);
-      setSessions(Array.isArray(baseResults[1]) ? (baseResults[1] as ClinicalSession[]) : []);
-      setPatients(Array.isArray(baseResults[2]) ? (baseResults[2] as Patient[]) : []);
-      setPatientsStats((baseResults[3] as { total: number; activeThisMonth: number; newThisWeek: number }) ?? { total: 0, activeThisMonth: 0, newThisWeek: 0 });
-      setTransportRequests(Array.isArray(baseResults[4]) ? (baseResults[4] as TransportRequest[]) : []);
-      setVehicles(Array.isArray(baseResults[5]) ? (baseResults[5] as { id: string; plateNumber?: string; status?: string }[]) : []);
-      setDoctors(Array.isArray(baseResults[6]) ? (baseResults[6] as User[]).filter((u) => u.role === 'doctor') : []);
-      if (isAdmin && reportCalls.length) {
-        const reportResults = await Promise.all(reportCalls);
-        setReportDashboardStats((reportResults[0] as typeof reportDashboardStats) ?? null);
-        setReportSessionsByDay(Array.isArray(reportResults[1]) ? (reportResults[1] as { date: string; count: number }[]) : null);
-        setReportHeatmap(Array.isArray(reportResults[2]) ? (reportResults[2] as { dayOfWeek: number; hour: number; count: number }[]) : null);
-        setReportDoctorPerf(Array.isArray(reportResults[3]) ? (reportResults[3] as { doctorId: string; doctorName: string; sessionsCount: number; avgRecovery: number; attendanceRate: number }[]) : null);
-        setReportPatientGrowth(Array.isArray(reportResults[4]) ? (reportResults[4] as { month: string; newPatients: number }[]) : null);
-        setReportTransportStats((reportResults[5] as typeof reportTransportStats) ?? null);
-      } else {
-        setReportDashboardStats(null);
-        setReportSessionsByDay(null);
-        setReportHeatmap(null);
-        setReportDoctorPerf(null);
-        setReportPatientGrowth(null);
-        setReportTransportStats(null);
+      if (isDemoMode()) {
+        const apts = (MOCK_APPOINTMENTS as unknown as Appointment[]).filter(
+          (a) => a.startTime >= start && a.startTime <= end + 'T23:59:59.999Z'
+        );
+        const tr = (MOCK_TRANSPORT_REQUESTS as unknown as TransportRequest[]).filter(
+          (r) => (r.createdAt ?? '').slice(0, 10) >= start && (r.createdAt ?? '').slice(0, 10) <= end
+        );
+        setAppointments(apts);
+        setPrevAppointments([]);
+        setPatients(MOCK_PATIENTS as unknown as Patient[]);
+        setTransport(tr);
+        setRecoveryCurves({});
+        setLoading(false);
+        return;
       }
+      const [aptsRes, prevAptsRes, patientsRes, transportRes] = await Promise.all([
+        apiGet<Appointment[]>(`/appointments?startDate=${start}&endDate=${end}`).catch(() => []),
+        apiGet<Appointment[]>(`/appointments?startDate=${prevStartStr}&endDate=${prevEndStr}`).catch(() => []),
+        apiGet<Patient[]>('/patients').catch(() => []),
+        apiGet<TransportRequest[]>('/transport/requests').catch(() => []),
+      ]);
+      const apts = Array.isArray(aptsRes) ? aptsRes : [];
+      const inRange = (d: string) => d >= start && d <= end + 'T23:59:59.999Z';
+      const trFiltered = (Array.isArray(transportRes) ? transportRes : []).filter(
+        (r) => inRange((r as TransportRequest).createdAt ?? '')
+      );
+      setAppointments(apts);
+      setPrevAppointments(Array.isArray(prevAptsRes) ? prevAptsRes : []);
+      setPatients(Array.isArray(patientsRes) ? patientsRes : []);
+      setTransport(trFiltered);
+
+      const byPatient = new Map<string, number>();
+      apts.forEach((a) => {
+        if (a.patientId) byPatient.set(a.patientId, (byPatient.get(a.patientId) ?? 0) + 1);
+      });
+      const top3PatientIds = [...byPatient.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([id]) => id);
+      const progressMap: Record<string, RecoveryPoint[]> = {};
+      await Promise.all(
+        top3PatientIds.map(async (id) => {
+          try {
+            const data = await apiGet<RecoveryPoint[]>(`/patients/${id}/progress`);
+            progressMap[id] = Array.isArray(data) ? data : [];
+          } catch {
+            progressMap[id] = [];
+          }
+        })
+      );
+      setRecoveryCurves(progressMap);
     } catch {
-      setAppointments([]);
-      setSessions([]);
-      setPatients([]);
-      setTransportRequests([]);
-      setVehicles([]);
-      setDoctors([]);
-      setReportDashboardStats(null);
-      setReportSessionsByDay(null);
-      setReportHeatmap(null);
-      setReportDoctorPerf(null);
-      setReportPatientGrowth(null);
-      setReportTransportStats(null);
+      setError('تعذر التحميل');
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, user?.id, user?.role]);
+  }, [dateRangeKey, customFrom, customTo, range.start, range.end]);
 
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    const r = getRangeForKey('month');
+    setCustomFrom(r.start);
+    setCustomTo(r.end);
+  }, []);
 
-  const tabs = [
-    { value: 'overview', label: '📊 نظرة عامة' },
-    { value: 'doctors', label: '👨‍⚕️ أداء الأطباء' },
-    { value: 'patients', label: '👥 تحليل المرضى' },
-    { value: 'transport', label: '🚐 تقارير النقل' },
-    { value: 'finance', label: '💰 المالية' },
-  ];
+  useEffect(() => {
+    fetchData();
+  }, [dateRangeKey, range.start, range.end, fetchData]);
 
-  return (
-    <div className="min-h-screen" style={{ background: BG, fontFamily: 'Cairo, sans-serif' }}>
-      <header className="sticky top-0 z-10 border-b px-6 py-4" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-        <div className="flex flex-wrap items-center gap-4">
-          <h1 className="text-xl font-bold text-white" style={{ fontSize: '20px' }}>📊 التقارير والإحصائيات</h1>
-          <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ borderColor: BORDER, backgroundColor: BG }}>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-transparent text-sm text-white outline-none" />
-            <span className="text-gray-500">→</span>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="bg-transparent text-sm text-white outline-none" />
-          </div>
-          <Button variant="ghost" size="sm" className="text-gray-400" onClick={() => fetchAll()}>🔄 تحديث</Button>
-          <Button size="sm" className="bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30" onClick={() => toast('قريباً')}>📥 تصدير PDF</Button>
-        </div>
-      </header>
+  const handleExportPdf = () => {
+    window.print();
+  };
 
-      <div className="border-b px-6 pt-4" style={{ borderColor: BORDER }}>
-        <div className="flex gap-1 rounded-xl p-1" style={{ backgroundColor: SURFACE }}>
-          {tabs.map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => setTab(t.value)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${tab === t.value ? 'bg-cyan-500/20 text-cyan-400' : 'text-gray-400 hover:text-white'}`}
-            >
-              {t.label}
-            </button>
-          ))}
+  const totalApts = appointments.length;
+  const prevTotalApts = prevAppointments.length;
+  const trendPct = prevTotalApts ? Math.round(((totalApts - prevTotalApts) / prevTotalApts) * 100) : 0;
+  const completedCount = appointments.filter((a) => a.status === 'completed').length;
+  const attendancePct = totalApts ? Math.round((completedCount / totalApts) * 100) : 0;
+  const patientIdsWithSession = new Set(appointments.map((a) => a.patientId).filter(Boolean));
+  const activePatients = patientIdsWithSession.size;
+  const transportCompleted = transport.filter((t) => t.status === 'completed' || t.status === 'arrived_at_center').length;
+  const transportCancelled = transport.filter((t) => t.status === 'cancelled').length;
+  const wheelchairCount = transport.filter((t) => t.mobilityNeed === 'wheelchair').length;
+  const avgRecovery = (() => {
+    const withScore = patients.filter((p) => p.recoveryScore != null);
+    if (!withScore.length) return null;
+    const sum = withScore.reduce((a, p) => a + (p.recoveryScore ?? 0), 0);
+    return Math.round(sum / withScore.length);
+  })();
+  const recoveryColor = avgRecovery == null ? '#4b5875' : avgRecovery > 70 ? GREEN : avgRecovery >= 40 ? AMBER : RED;
+
+  const last7Days = (() => {
+    const out: { date: string; dayName: string; completed: number; in_progress: number; cancelled: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = toDateStr(d);
+      const dayAppointments = appointments.filter((a) => a.startTime.startsWith(dateStr));
+      out.push({
+        date: dateStr,
+        dayName: DAY_NAMES_AR[d.getDay()],
+        completed: dayAppointments.filter((a) => a.status === 'completed').length,
+        in_progress: dayAppointments.filter((a) => a.status === 'in_progress').length,
+        cancelled: dayAppointments.filter((a) => a.status === 'cancelled').length,
+      });
+    }
+    return out;
+  })();
+
+  const statusDistribution = (() => {
+    const s: Record<string, number> = { scheduled: 0, completed: 0, cancelled: 0, in_transit: 0, in_progress: 0 };
+    appointments.forEach((a) => {
+      const st = a.status === 'in_progress' ? 'in_progress' : a.status;
+      s[st] = (s[st] ?? 0) + 1;
+    });
+    return Object.entries(s).filter(([, n]) => n > 0);
+  })();
+
+  const doctorStats = (() => {
+    const byDoctor: Record<string, { name: string; sessions: number; completed: number }> = {};
+    appointments.forEach((a) => {
+      const id = a.doctorId ?? 'unknown';
+      if (!byDoctor[id]) {
+        byDoctor[id] = { name: a.doctor?.nameAr ?? '—', sessions: 0, completed: 0 };
+      }
+      byDoctor[id].sessions += 1;
+      if (a.status === 'completed') byDoctor[id].completed += 1;
+    });
+    return Object.entries(byDoctor)
+      .map(([id, d]) => ({ id, ...d, attendance: d.sessions ? Math.round((d.completed / d.sessions) * 100) : 0 }))
+      .sort((a, b) => b.sessions - a.sessions)
+      .slice(0, 5);
+  })();
+
+  const patientSessionCount = new Map<string, number>();
+  const patientLastVisit = new Map<string, string>();
+  appointments.forEach((a) => {
+    if (a.patientId) {
+      patientSessionCount.set(a.patientId, (patientSessionCount.get(a.patientId) ?? 0) + 1);
+      const d = (a.startTime ?? '').slice(0, 10);
+      const prev = patientLastVisit.get(a.patientId);
+      if (!prev || d > prev) patientLastVisit.set(a.patientId, d);
+    }
+  });
+  const topPatients = patients
+    .map((p) => ({
+      ...p,
+      sessionCount: patientSessionCount.get(p.id) ?? 0,
+      lastVisit: patientLastVisit.get(p.id) ?? null,
+    }))
+    .sort((a, b) => b.sessionCount - a.sessionCount)
+    .slice(0, 5);
+
+  const transportByDay = (() => {
+    const byDay: { date: string; dayName: string; count: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = toDateStr(d);
+      const count = transport.filter((r) => (r.createdAt ?? '').startsWith(dateStr)).length;
+      byDay.push({ date: dateStr, dayName: DAY_NAMES_AR[d.getDay()], count });
+    }
+    return byDay;
+  })();
+  const maxTransportCount = Math.max(1, ...transportByDay.map((d) => d.count));
+
+  if (error) {
+    return (
+      <div className="reports-page min-h-screen p-6" style={{ background: BG }}>
+        <div className="rounded-2xl border p-6" style={{ background: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)' }}>
+          <p className="text-amber-200">تعذر التحميل — إعادة المحاولة</p>
+          <button type="button" className="mt-3 rounded-lg bg-amber-500/20 px-4 py-2 text-amber-400 hover:bg-amber-500/30" onClick={() => fetchData()}>
+            إعادة المحاولة
+          </button>
         </div>
       </div>
+    );
+  }
 
-      <main className="p-6">
+  return (
+    <div
+      className="reports-page min-h-screen"
+      style={{
+        background: BG,
+        fontFamily: 'Cairo, sans-serif',
+        backgroundImage: 'radial-gradient(ellipse at 0% 0%, rgba(34,211,238,0.06) 0%, transparent 50%)',
+      }}
+    >
+      <header className="sticky top-0 z-10 border-b px-6 py-4 print:static" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-xl font-bold text-[#dde6f5]">📊 التقارير والإحصائيات</h1>
+          <div className="flex flex-wrap items-center gap-3 print:hidden">
+            <div className="flex rounded-xl border p-1" style={{ borderColor: BORDER, backgroundColor: BG }}>
+              {(['week', 'month', '3months'] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setDateRangeKey(key)}
+                  className={`rounded-lg px-3 py-1.5 text-sm ${dateRangeKey === key ? 'bg-cyan-500/20 text-cyan-400' : 'text-[#4b5875] hover:text-[#dde6f5]'}`}
+                >
+                  {key === 'week' ? 'هذا الأسبوع' : key === 'month' ? 'هذا الشهر' : 'آخر 3 أشهر'}
+                </button>
+              ))}
+            </div>
+            {dateRangeKey === 'custom' && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="rounded-lg border bg-[#101622] px-2 py-1.5 text-sm text-[#dde6f5]"
+                  style={{ borderColor: BORDER }}
+                />
+                <span className="text-[#4b5875]">→</span>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="rounded-lg border bg-[#101622] px-2 py-1.5 text-sm text-[#dde6f5]"
+                  style={{ borderColor: BORDER }}
+                />
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setDateRangeKey('custom')}
+              className="rounded-lg border px-3 py-1.5 text-sm text-[#4b5875] hover:text-[#dde6f5]"
+              style={{ borderColor: BORDER }}
+            >
+              مخصص
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              className="rounded-xl border border-[rgba(255,255,255,0.1)] bg-transparent px-4 py-2 text-sm text-[#dde6f5] hover:bg-white/5"
+            >
+              تصدير PDF
+            </button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-[#4b5875] print:mt-0">
+          من {startStr} إلى {endStr}
+        </p>
+      </header>
+
+      <main className="p-6 print:p-0">
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Card key={i} className="animate-pulse rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-                <CardContent className="p-4"><div className="h-16 rounded bg-white/10" /></CardContent>
-              </Card>
+              <div key={i} className="animate-pulse rounded-2xl border p-4" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="h-4 w-2/3 rounded bg-white/10" />
+                <div className="mt-2 h-8 w-1/2 rounded bg-white/10" />
+              </div>
             ))}
           </div>
         ) : (
           <>
-            {tab === 'overview' && (
-              <OverviewTab
-                appointments={appointments}
-                sessions={sessions}
-                patients={patients}
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                reportDashboardStats={reportDashboardStats}
-                reportSessionsByDay={reportSessionsByDay}
-                reportHeatmap={reportHeatmap}
+            {/* Section 1 — KPI Cards */}
+            <section className="report-section mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-6 print:break-after-page" style={{ animation: 'fadeUp 0.3s ease-out both' }}>
+              <KPICard
+                styleIndex={0}
+                label="إجمالي المواعيد"
+                value={totalApts}
+                subStat={trendPct !== 0 ? `${trendPct > 0 ? '↑' : '↓'} ${Math.abs(trendPct)}% عن الفترة السابقة` : undefined}
+                trend={trendPct > 0 ? 'up' : trendPct < 0 ? 'down' : undefined}
+                accent={CYAN}
+                icon="📅"
               />
-            )}
-            {tab === 'doctors' && <DoctorsTab appointments={appointments} sessions={sessions} doctors={doctors} reportDoctorPerf={reportDoctorPerf} />}
-            {tab === 'patients' && <PatientsTab patients={patients} patientsStats={patientsStats} sessions={sessions} reportPatientGrowth={reportPatientGrowth} />}
-            {tab === 'transport' && (
-              <TransportTab
-                transportRequests={transportRequests}
-                vehicles={vehicles}
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                reportTransportStats={reportTransportStats}
+              <KPICard
+                styleIndex={1}
+                label="معدل الحضور"
+                value={`${attendancePct}%`}
+                accent={GREEN}
+                icon="✅"
               />
-            )}
-            {tab === 'finance' && <FinanceTab />}
+              <KPICard
+                styleIndex={2}
+                label="مرضى نشطون"
+                value={activePatients}
+                accent={PURPLE}
+                icon="👥"
+              />
+              <KPICard
+                styleIndex={3}
+                label="جلسات مكتملة"
+                value={completedCount}
+                accent={GREEN}
+                icon="⚡"
+              />
+              <KPICard
+                styleIndex={4}
+                label="طلبات النقل"
+                value={transport.length}
+                subStat={`${transportCompleted} مكتمل / ${transportCancelled} ملغى`}
+                accent={AMBER}
+                icon="🚐"
+              />
+              <KPICard
+                styleIndex={5}
+                label="متوسط التعافي"
+                value={avgRecovery != null ? `${avgRecovery}%` : '—'}
+                accent={recoveryColor}
+                icon="📈"
+                progress={avgRecovery != null ? avgRecovery : undefined}
+              />
+            </section>
+
+            {/* Section 2 — Charts */}
+            <section className="report-section mb-8 grid gap-6 lg:grid-cols-10 print:break-after-page" style={{ animation: 'fadeUp 0.3s ease-out both', animationDelay: '50ms' }}>
+              <div className="lg:col-span-6 rounded-2xl border p-4" style={{ background: SURFACE, borderColor: BORDER }}>
+                <h3 className="mb-4 text-sm font-medium text-[#4b5875]">المواعيد الأسبوعية</h3>
+                <BarChartSVG data={last7Days} />
+              </div>
+              <div className="lg:col-span-4 rounded-2xl border p-4" style={{ background: SURFACE, borderColor: BORDER }}>
+                <h3 className="mb-4 text-sm font-medium text-[#4b5875]">توزيع الحالات</h3>
+                <DonutChartSVG data={statusDistribution} total={totalApts} />
+              </div>
+            </section>
+
+            {/* Section 3 — Tables */}
+            <section className="report-section mb-8 grid gap-6 lg:grid-cols-2 print:break-after-page" style={{ animation: 'fadeUp 0.3s ease-out both', animationDelay: '100ms' }}>
+              <div className="rounded-2xl border overflow-hidden" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="border-b px-4 py-3" style={{ borderColor: BORDER }}>
+                  <h3 className="text-sm font-medium text-[#dde6f5]">أفضل الأطباء</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ borderColor: BORDER }}>
+                        <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>الطبيب</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>الجلسات</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>معدل الحضور</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>متوسط التعافي</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {doctorStats.map((d) => (
+                        <tr key={d.id} className="border-b hover:bg-white/[0.02]" style={{ borderColor: 'rgba(255,255,255,0.04)' }}>
+                          <td className="px-4 py-3">
+                            <span className="inline-block h-2 w-2 rounded-full bg-cyan-500 mr-2" />
+                            <span className="text-[#dde6f5]">{d.name}</span>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-[#dde6f5]" style={{ fontFamily: "'Space Mono', monospace" }}>{d.sessions}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+                                <div className="h-full rounded-full bg-green-500" style={{ width: `${d.attendance}%` }} />
+                              </div>
+                              <span className="text-xs text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>{d.attendance}%</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-[#4b5875]">—</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="border-t px-4 py-2 text-center" style={{ borderColor: BORDER }}>
+                  <button type="button" className="text-xs text-cyan-400 hover:underline print:hidden">عرض الكل</button>
+                </div>
+              </div>
+              <div className="rounded-2xl border overflow-hidden" style={{ background: SURFACE, borderColor: BORDER }}>
+                <div className="border-b px-4 py-3" style={{ borderColor: BORDER }}>
+                  <h3 className="text-sm font-medium text-[#dde6f5]">المرضى الأكثر نشاطاً</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ borderColor: BORDER }}>
+                        <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>المريض</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>الجلسات</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>التعافي</th>
+                        <th className="px-4 py-2 text-right text-[10px] font-medium uppercase tracking-wider text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>آخر زيارة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topPatients.map((p) => {
+                        const score = p.recoveryScore ?? null;
+                        const barColor = score == null ? '#4b5875' : score > 70 ? GREEN : score >= 40 ? AMBER : RED;
+                        return (
+                          <tr
+                            key={p.id}
+                            className="cursor-pointer border-b hover:bg-white/[0.02] print:cursor-default"
+                            style={{ borderColor: 'rgba(255,255,255,0.04)' }}
+                            onClick={() => navigate(`/patients/${p.id}`)}
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-cyan-500/30 to-cyan-600/20 text-xs font-bold text-white">
+                                  {(p.nameAr ?? '؟').slice(0, 2)}
+                                </div>
+                                <span className="text-[#dde6f5]">{p.nameAr}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-[#dde6f5]" style={{ fontFamily: "'Space Mono', monospace" }}>{p.sessionCount}</td>
+                            <td className="px-4 py-3">
+                              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+                                <div className="h-full rounded-full" style={{ width: `${score ?? 0}%`, backgroundColor: barColor }} />
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>
+                              {p.lastVisit ?? '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 4 — Transport */}
+            <section className="report-section mb-8 rounded-2xl border p-6 print:break-after-page" style={{ background: SURFACE, borderColor: BORDER, animation: 'fadeUp 0.3s ease-out both', animationDelay: '150ms' }}>
+              <h3 className="mb-4 text-base font-medium text-[#dde6f5]">📊 تحليل النقل</h3>
+              <div className="mb-6 flex flex-wrap gap-6">
+                <div>
+                  <p className="text-[11px] text-[#4b5875]">معدل إكمال الرحلات</p>
+                  <p className="text-2xl font-bold text-[#dde6f5]" style={{ fontFamily: "'Space Mono', monospace" }}>
+                    {transport.length ? Math.round((transportCompleted / transport.length) * 100) : 0}%
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-[#4b5875]">متوسط وقت الاستلام</p>
+                  <p className="text-2xl font-bold text-amber-400" style={{ fontFamily: "'Space Mono', monospace" }}>—</p>
+                </div>
+                <div>
+                  <p className="text-[11px] text-[#4b5875]">احتياجية كرسي متحرك</p>
+                  <p className="text-2xl font-bold text-[#dde6f5]" style={{ fontFamily: "'Space Mono', monospace" }}>{wheelchairCount}</p>
+                </div>
+              </div>
+              <TransportBarChartSVG data={transportByDay} maxCount={maxTransportCount} />
+            </section>
+
+            {/* Section 5 — Recovery Trends */}
+            <section className="report-section rounded-2xl border p-6 print:break-after-page" style={{ background: SURFACE, borderColor: BORDER, animation: 'fadeUp 0.3s ease-out both', animationDelay: '200ms' }}>
+              <h3 className="mb-4 text-base font-medium text-[#dde6f5]">📈 منحنى التعافي العام</h3>
+              <RecoveryLineChartSVG curves={recoveryCurves} patients={patients} />
+            </section>
           </>
         )}
       </main>
@@ -308,736 +539,227 @@ export function Reports() {
 function KPICard({
   label,
   value,
+  subStat,
   trend,
+  accent,
   icon,
+  progress,
   styleIndex,
 }: {
   label: string;
   value: string | number;
-  trend?: 'up' | 'down' | null;
-  icon?: string;
+  subStat?: string;
+  trend?: 'up' | 'down';
+  accent: string;
+  icon: string;
+  progress?: number;
   styleIndex?: number;
 }) {
   return (
-    <Card
-      className="rounded-2xl border transition-all hover:-translate-y-0.5 hover:border-cyan-500/40"
+    <div
+      className="rounded-2xl border p-4 transition-all hover:-translate-y-0.5"
       style={{
-        backgroundColor: SURFACE,
+        background: SURFACE,
         borderColor: BORDER,
+        borderTop: `2px solid ${accent}`,
         animation: 'fadeUp 0.3s ease-out both',
         animationDelay: styleIndex != null ? `${styleIndex * 50}ms` : undefined,
       }}
     >
-      <CardContent className="relative p-4">
-        {icon && <div className="absolute right-2 top-2 text-2xl opacity-20">{icon}</div>}
-        <p className="text-[11px] text-gray-400">{label}</p>
-        <p className="mt-1 text-[26px] font-bold text-white" style={{ fontFamily: "'Space Mono', monospace" }}>{value}</p>
-        {trend != null && (
-          <span className={`text-xs ${trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>{trend === 'up' ? '↑' : '↓'}</span>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function OverviewTab({
-  appointments,
-  sessions,
-  patients,
-  dateFrom,
-  dateTo,
-  reportDashboardStats,
-  reportSessionsByDay,
-  reportHeatmap,
-}: {
-  appointments: Appointment[];
-  sessions: ClinicalSession[];
-  patients: Patient[];
-  dateFrom: string;
-  dateTo: string;
-  reportDashboardStats?: { totalSessions: number; avgRecovery: number; attendanceRate: number; cancellations: number; newPatients: number; revenue: number } | null;
-  reportSessionsByDay?: { date: string; count: number }[] | null;
-  reportHeatmap?: { dayOfWeek: number; hour: number; count: number }[] | null;
-}) {
-  const completed = reportDashboardStats ? reportDashboardStats.totalSessions : appointments.filter((a) => a.status === 'completed').length;
-  const cancelled = reportDashboardStats ? reportDashboardStats.cancellations : appointments.filter((a) => a.status === 'cancelled').length;
-  const total = appointments.length;
-  const attendanceRate = reportDashboardStats ? reportDashboardStats.attendanceRate : (total ? Math.round((appointments.filter((a) => a.status === 'completed' || a.status === 'in_progress').length / total) * 100) : 0);
-  const avgRecovery = reportDashboardStats ? reportDashboardStats.avgRecovery : (sessions.filter((s) => s.recoveryScore != null).length ? Math.round(sessions.reduce((a, s) => a + (s.recoveryScore ?? 0), 0) / sessions.filter((s) => s.recoveryScore != null).length) : 0);
-  const newPatientsInRange = reportDashboardStats ? reportDashboardStats.newPatients : patients.filter((p) => p.createdAt >= dateFrom && p.createdAt <= dateTo + 'T23:59:59.999Z').length;
-  const revenue = reportDashboardStats ? reportDashboardStats.revenue : 0;
-
-  const dailyData = (() => {
-    if (reportSessionsByDay && reportSessionsByDay.length) {
-      return reportSessionsByDay.map((r) => ({ day: r.date.slice(8, 10), count: r.count })).slice(-14);
-    }
-    const byDay: Record<string, number> = {};
-    appointments.forEach((a) => {
-      const day = a.startTime.slice(0, 10);
-      byDay[day] = (byDay[day] ?? 0) + 1;
-    });
-    const start = new Date(dateFrom);
-    const end = new Date(dateTo);
-    const out: { day: string; count: number }[] = [];
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = toDateStr(d);
-      out.push({ day: key.slice(8, 10), count: byDay[key] ?? 0 });
-    }
-    return out.slice(-14);
-  })();
-
-  const diagnosisData = (() => {
-    const byDiag: Record<string, number> = {};
-    patients.forEach((p) => {
-      const d = p.diagnosis || 'غير محدد';
-      byDiag[d] = (byDiag[d] ?? 0) + 1;
-    });
-    return Object.entries(byDiag).map(([name, count]) => ({ name, value: count }));
-  })();
-  const diagnosisColors = [CYAN, GREEN, AMBER, RED, PURPLE];
-
-  const heatmapData = (() => {
-    const grid: Record<number, Record<number, number>> = {};
-    for (let h = 8; h <= 17; h++) grid[h] = {};
-    if (reportHeatmap && reportHeatmap.length) {
-      reportHeatmap.forEach((r) => {
-        if (r.hour >= 8 && r.hour <= 17) {
-          if (!grid[r.hour]) grid[r.hour] = {};
-          grid[r.hour][r.dayOfWeek] = (grid[r.hour][r.dayOfWeek] ?? 0) + r.count;
-        }
-      });
-    } else {
-      appointments.forEach((a) => {
-        const d = new Date(a.startTime);
-        const hour = d.getHours();
-        const day = d.getDay();
-        if (hour >= 8 && hour <= 17) {
-          grid[hour][day] = (grid[hour][day] ?? 0) + 1;
-        }
-      });
-    }
-    return grid;
-  })();
-  const maxHeat = Math.max(0, 1, ...Object.values(heatmapData).flatMap((h) => Object.values(h)));
-
-  const weeklyRecovery = (() => {
-    const byWeek: Record<string, number[]> = {};
-    sessions.forEach((s) => {
-      if (s.recoveryScore == null || !s.appointment?.startTime) return;
-      const d = new Date(s.appointment.startTime);
-      const weekStart = new Date(d);
-      weekStart.setDate(d.getDate() - d.getDay());
-      const key = toDateStr(weekStart);
-      if (!byWeek[key]) byWeek[key] = [];
-      byWeek[key].push(s.recoveryScore);
-    });
-    return Object.entries(byWeek).map(([week, scores]) => ({ week: week.slice(5), avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) })).slice(-8);
-  })();
-
-  const recentSessions = sessions.slice(0, 10);
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <KPICard styleIndex={0} label="إجمالي الجلسات" value={completed} trend="up" icon="📋" />
-        <KPICard styleIndex={1} label="متوسط التعافي" value={avgRecovery + '%'} icon="📈" />
-        <KPICard styleIndex={2} label="نسبة الحضور" value={attendanceRate + '%'} icon="✅" />
-        <KPICard styleIndex={3} label="الإلغاءات" value={cancelled} icon="❌" />
-        <KPICard styleIndex={4} label="مرضى جدد" value={newPatientsInRange} icon="👤" />
-        <KPICard styleIndex={5} label="إيرادات الشهر" value={revenue ? `$${revenue.toLocaleString()}` : '$0'} icon="💰" />
-      </div>
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">جلسات يومية</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <XAxis dataKey="day" tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <YAxis tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <Tooltip contentStyle={{ backgroundColor: TOOLTIP_BG, border: `1px solid rgba(255,255,255,0.1)`, borderRadius: 8 }} labelStyle={{ color: '#fff' }} />
-                  <Bar dataKey="count" fill={CYAN} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">توزيع الحالات (التشخيص)</CardTitle></CardHeader>
-          <CardContent>
-            {diagnosisData.length === 0 ? (
-              <p className="py-8 text-center text-gray-400">لا توجد بيانات</p>
-            ) : (
-              <div className="h-[200px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={diagnosisData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={2}>
-                      {diagnosisData.map((_, i) => <Cell key={i} fill={diagnosisColors[i % diagnosisColors.length]} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ backgroundColor: TOOLTIP_BG, border: `1px solid rgba(255,255,255,0.1)`, borderRadius: 8 }} />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-      <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-        <CardHeader><CardTitle className="text-base text-white">كثافة المواعيد (ساعة × يوم)</CardTitle></CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="w-14 py-2 text-left text-[11px] text-gray-400" style={{ fontFamily: "'Space Mono', monospace" }}>وقت</th>
-                  {DAY_NAMES_AR.map((d) => <th key={d} className="py-2 text-center text-[11px] text-gray-400">{d}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {[8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map((hour) => (
-                  <tr key={hour}>
-                    <td className="py-1 text-gray-400" style={{ fontFamily: "'Space Mono', monospace" }}>{hour}:00</td>
-                    {[0, 1, 2, 3, 4, 5, 6].map((day) => {
-                      const count = heatmapData[hour]?.[day] ?? 0;
-                      const opacity = maxHeat ? count / Math.max(maxHeat, 1) : 0;
-                      return (
-                        <td key={day} className="p-1">
-                          <div className="rounded bg-cyan-500/30 text-center text-xs text-white" style={{ backgroundColor: `rgba(34, 211, 238, ${0.2 + opacity * 0.8})` }} title={`${DAY_NAMES_AR[day]} ${hour}:00 — ${count} جلسات`}>
-                            {count || ''}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">اتجاه التعافي أسبوعياً</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyRecovery} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <XAxis dataKey="week" tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <YAxis tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <Tooltip contentStyle={{ backgroundColor: TOOLTIP_BG, border: `1px solid rgba(255,255,255,0.1)`, borderRadius: 8 }} />
-                  <Bar dataKey="avg" fill={GREEN} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">آخر الجلسات</CardTitle></CardHeader>
-          <CardContent>
-            {recentSessions.length === 0 ? (
-              <p className="py-6 text-center text-gray-400">لا توجد جلسات</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b" style={{ borderColor: BORDER }}>
-                      <th className="py-2 text-right text-gray-400">المريض</th>
-                      <th className="py-2 text-right text-gray-400">الطبيب</th>
-                      <th className="py-2 text-right text-gray-400">التعافي</th>
-                      <th className="py-2 text-right text-gray-400">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentSessions.map((s) => (
-                      <tr key={s.id} className="border-b" style={{ borderColor: BORDER }}>
-                        <td className="py-2 text-white">{s.appointment?.patient?.nameAr ?? '—'}</td>
-                        <td className="py-2 text-gray-400">{s.appointment?.doctor?.nameAr ?? '—'}</td>
-                        <td className="py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-12 overflow-hidden rounded-full bg-white/10">
-                              <div className="h-full rounded-full" style={{ width: `${s.recoveryScore ?? 0}%`, backgroundColor: (s.recoveryScore ?? 0) > 70 ? GREEN : (s.recoveryScore ?? 0) >= 40 ? AMBER : RED }} />
-                            </div>
-                            <span style={{ fontFamily: "'Space Mono', monospace" }}>{s.recoveryScore ?? 0}%</span>
-                          </div>
-                        </td>
-                        <td className="py-2"><Badge className="bg-green-500/20 text-green-400 text-xs">مكتمل</Badge></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function DoctorsTab({
-  appointments,
-  sessions,
-  doctors,
-  reportDoctorPerf,
-}: {
-  appointments: Appointment[];
-  sessions: ClinicalSession[];
-  doctors: User[];
-  reportDoctorPerf?: { doctorId: string; doctorName: string; sessionsCount: number; avgRecovery: number; attendanceRate: number }[] | null;
-}) {
-  const completed = appointments.filter((a) => a.status === 'completed');
-  const totalByDoctor: Record<string, number> = {};
-  const recoveryByDoctor: Record<string, number[]> = {};
-  doctors.forEach((d) => { totalByDoctor[d.id] = 0; recoveryByDoctor[d.id] = []; });
-  completed.forEach((a) => {
-    if (a.doctorId && totalByDoctor[a.doctorId] != null) totalByDoctor[a.doctorId]++;
-  });
-  sessions.forEach((s) => {
-    const docId = (s.appointment as { doctorId?: string })?.doctorId;
-    if (docId && s.recoveryScore != null) recoveryByDoctor[docId]?.push(s.recoveryScore);
-  });
-  const totalSessions = reportDoctorPerf?.length
-    ? reportDoctorPerf.reduce((s, p) => s + p.sessionsCount, 0)
-    : completed.length;
-  const bestRecovery = reportDoctorPerf?.length
-    ? reportDoctorPerf.reduce((best, p) => (p.avgRecovery > (best.avg ?? 0) ? { name: p.doctorName ?? '—', avg: p.avgRecovery } : best), { name: '—', avg: 0 as number })
-    : doctors.length
-      ? doctors.reduce((best, d) => {
-          const arr = recoveryByDoctor[d.id] ?? [];
-          const avg = arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-          return avg > (best.avg ?? 0) ? { name: d.nameAr ?? d.id, avg } : best;
-        }, { name: '—', avg: 0 as number })
-      : { name: '—', avg: 0 };
-  const totalAppts = appointments.length;
-  const attendancePct = reportDoctorPerf?.length
-    ? Math.max(0, ...reportDoctorPerf.map((p) => p.attendanceRate))
-    : (() => {
-        const attended = appointments.filter((a) => a.status === 'completed' || a.status === 'in_progress').length;
-        return totalAppts ? Math.round((attended / totalAppts) * 100) : 0;
-      })();
-
-  const weeklyByDoctor = (() => {
-    const byWeek: Record<string, Record<string, number>> = {};
-    completed.forEach((a) => {
-      const d = new Date(a.startTime);
-      const weekStart = new Date(d);
-      weekStart.setDate(d.getDate() - d.getDay());
-      const key = toDateStr(weekStart);
-      if (!byWeek[key]) byWeek[key] = {};
-      const docId = a.doctorId ?? 'unknown';
-      byWeek[key][docId] = (byWeek[key][docId] ?? 0) + 1;
-    });
-    const weeks = Object.keys(byWeek).slice(-6);
-    return weeks.map((week) => {
-      const row: Record<string, string | number> = { week: week.slice(5) };
-      doctors.forEach((d) => { row[d.nameAr ?? d.id] = byWeek[week]?.[d.id] ?? 0; });
-      return row;
-    });
-  })();
-
-  const docColors = [CYAN, GREEN, AMBER, PURPLE];
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <KPICard label="عدد الأطباء" value={doctors.length} icon="👨‍⚕️" />
-        <KPICard label="جلسات هذا الشهر" value={totalSessions} icon="📋" />
-        <KPICard label="أعلى تعافي" value={bestRecovery.name + ' ' + Math.round(bestRecovery.avg) + '%'} icon="📈" />
-        <KPICard label="أعلى حضور" value={attendancePct + '%'} icon="✅" />
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {doctors.map((d) => {
-          const sessCount = totalByDoctor[d.id] ?? 0;
-          const recScores = recoveryByDoctor[d.id] ?? [];
-          const avgRec = recScores.length ? Math.round(recScores.reduce((a, b) => a + b, 0) / recScores.length) : 0;
-          const att = totalAppts ? Math.round((sessCount / totalAppts) * 100) : 0;
-          return (
-            <Card key={d.id} className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-cyan-500/30 to-cyan-600/20 flex items-center justify-center text-lg font-bold text-white">
-                    {(d.nameAr ?? 'د').slice(0, 2)}
-                  </div>
-                  <div>
-                    <p className="font-medium text-white">{d.nameAr ?? d.id}</p>
-                    <p className="text-xs text-gray-400">طبيب</p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Badge className="bg-cyan-500/20 text-cyan-400 text-xs">{sessCount} جلسات</Badge>
-                  <Badge className="bg-green-500/20 text-green-400 text-xs">{avgRec}% تعافي</Badge>
-                  <Badge className="bg-amber-500/20 text-amber-400 text-xs">{att}% حضور</Badge>
-                </div>
-                <div className="mt-3 space-y-2">
-                  <div><div className="h-2 w-full rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-500/70" style={{ width: `${Math.min(100, sessCount * 5)}%` }} /></div></div>
-                  <div><div className="h-2 w-full rounded-full bg-white/10"><div className="h-full rounded-full bg-green-500/70" style={{ width: `${avgRec}%` }} /></div></div>
-                  <div><div className="h-2 w-full rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-500/70" style={{ width: `${att}%` }} /></div></div>
-                  <div><div className="h-2 w-full rounded-full bg-white/10"><div className="h-full rounded-full bg-purple-500/70" style={{ width: '60%' }} /></div></div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      {weeklyByDoctor.length > 0 && (
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">جلسات أسبوعية لكل طبيب</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyByDoctor} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <XAxis dataKey="week" tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <YAxis tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <Tooltip contentStyle={{ backgroundColor: TOOLTIP_BG, border: `1px solid rgba(255,255,255,0.1)`, borderRadius: 8 }} />
-                  <Legend />
-                  {doctors.slice(0, 4).map((d, idx) => (
-                    <Bar key={d.id} dataKey={d.nameAr ?? d.id} fill={docColors[idx % docColors.length]} radius={[0, 0, 0, 0]} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+      {icon && <span className="text-xl opacity-80">{icon}</span>}
+      <p className="mt-1 text-[11px] text-[#4b5875]">{label}</p>
+      <p className="mt-0.5 text-[32px] font-bold" style={{ color: accent, fontFamily: "'Space Mono', monospace" }}>
+        {value}
+      </p>
+      {subStat && (
+        <p className="mt-1 text-[10px] text-[#4b5875]">{subStat}</p>
+      )}
+      {trend != null && (
+        <p className={`text-[10px] ${trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
+          {trend === 'up' ? '↑' : '↓'}
+        </p>
+      )}
+      {progress != null && (
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, progress)}%`, backgroundColor: accent }} />
+        </div>
       )}
     </div>
   );
 }
 
-function PatientsTab({
-  patients,
-  patientsStats,
-  sessions,
-  reportPatientGrowth,
+function BarChartSVG({
+  data,
 }: {
-  patients: Patient[];
-  patientsStats: { total: number; activeThisMonth: number; newThisWeek: number };
-  sessions: ClinicalSession[];
-  reportPatientGrowth?: { month: string; newPatients: number }[] | null;
+  data: { dayName: string; completed: number; in_progress: number; cancelled: number }[];
 }) {
-  const completed90 = patients.filter((p) => {
-    const patientSessions = sessions.filter((s) => (s.appointment as { patientId?: string })?.patientId === p.id);
-    const scores = patientSessions.map((s) => s.recoveryScore).filter((n): n is number => n != null);
-    const last = scores[scores.length - 1];
-    return last != null && last >= 90;
-  }).length;
-  const avgSessions = patients.length ? (sessions.length / patients.length).toFixed(1) : '0';
-
-  const growthData = (() => {
-    if (reportPatientGrowth && reportPatientGrowth.length) {
-      return reportPatientGrowth.map((r) => ({ month: r.month.slice(5), count: r.newPatients })).slice(-12);
-    }
-    const byMonth: Record<string, number> = {};
-    patients.forEach((p) => {
-      const m = p.createdAt.slice(0, 7);
-      byMonth[m] = (byMonth[m] ?? 0) + 1;
-    });
-    return Object.entries(byMonth).map(([month, count]) => ({ month: month.slice(5), count })).slice(-12);
-  })();
-
-  const diagnosisDist = (() => {
-    const byDiag: Record<string, number> = {};
-    patients.forEach((p) => {
-      const d = p.diagnosis || 'غير محدد';
-      byDiag[d] = (byDiag[d] ?? 0) + 1;
-    });
-    return Object.entries(byDiag).map(([name, count]) => ({ name, count }));
-  })();
-  const distColors = [CYAN, GREEN, AMBER, RED, PURPLE];
-  const maxDist = Math.max(1, ...diagnosisDist.map((d) => d.count));
-
-  const improving = (() => {
-    const list = patients.map((p) => {
-      const patientSessions = sessions.filter((s) => (s.appointment as { patientId?: string })?.patientId === p.id).sort((a, b) => (a.appointment?.startTime ?? '').localeCompare(b.appointment?.startTime ?? ''));
-      const scores = patientSessions.map((s) => s.recoveryScore).filter((n): n is number => n != null);
-      const start = scores[0] ?? 0;
-      const current = scores[scores.length - 1] ?? 0;
-      return { patient: p, start, current, improvement: current - start, sessions: patientSessions.length };
-    });
-    return list.filter((x) => x.improvement > 0).sort((a, b) => b.improvement - a.improvement).slice(0, 10);
-  })();
+  const w = 400;
+  const h = 220;
+  const pad = { left: 40, right: 20, top: 20, bottom: 36 };
+  const maxVal = Math.max(1, ...data.map((d) => d.completed + d.in_progress + d.cancelled));
+  const chartW = w - pad.left - pad.right;
+  const chartH = h - pad.top - pad.bottom;
+  const barW = Math.max(8, (chartW / data.length) * 0.5);
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <KPICard label="إجمالي المرضى" value={patientsStats.total} icon="👥" />
-        <KPICard label="نشط هذا الشهر" value={patientsStats.activeThisMonth} icon="✅" />
-        <KPICard label="جدد هذا الأسبوع" value={patientsStats.newThisWeek} icon="🆕" />
-        <KPICard label="أكملوا العلاج (≥90%)" value={completed90} icon="🎯" />
-        <KPICard label="متوسط الجلسات/مريض" value={avgSessions} icon="📋" />
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+      <rect width={w} height={h} fill={SURFACE} />
+      {data.map((d, i) => {
+        const total = d.completed + d.in_progress + d.cancelled;
+        const scale = total / maxVal;
+        const barTotalH = Math.max(4, scale * chartH * 0.8);
+        const x = pad.left + (i + 0.5) * (chartW / data.length) - barW / 2;
+        const yAcc = pad.top + chartH - barTotalH;
+        const segH = (n: number) => (total ? (n / total) * barTotalH : 0);
+        const yCancelled = yAcc;
+        const yInProgress = yAcc + segH(d.cancelled);
+        const yCompleted = yAcc + segH(d.cancelled) + segH(d.in_progress);
+        return (
+          <g key={d.dayName}>
+            {d.completed > 0 && <rect x={x} y={yCompleted} width={barW} height={segH(d.completed)} rx={2} fill={GREEN} />}
+            {d.in_progress > 0 && <rect x={x} y={yInProgress} width={barW} height={segH(d.in_progress)} rx={2} fill={CYAN} />}
+            {d.cancelled > 0 && <rect x={x} y={yCancelled} width={barW} height={segH(d.cancelled)} rx={2} fill={RED} />}
+            <text x={x + barW / 2} y={h - 8} textAnchor="middle" fill="#4b5875" fontSize="10" fontFamily="Cairo">
+              {d.dayName}
+            </text>
+          </g>
+        );
+      })}
+      <line x1={pad.left} y1={pad.top} x2={pad.left} y2={h - pad.bottom} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+      <line x1={pad.left} y1={h - pad.bottom} x2={w - pad.right} y2={h - pad.bottom} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+    </svg>
+  );
+}
+
+function DonutChartSVG({ data, total }: { data: [string, number][]; total: number }) {
+  const size = 180;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 70;
+  let acc = 0;
+  const segments = data.map(([status, count]) => {
+    const pct = total ? count / total : 0;
+    const start = acc;
+    acc += pct;
+    return { status, count, start: start * 360, sweep: pct * 360, color: STATUS_COLORS[status] ?? '#4b5875' };
+  });
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {segments.map((seg, i) => {
+          const startRad = (seg.start - 90) * (Math.PI / 180);
+          const endRad = (seg.start + seg.sweep - 90) * (Math.PI / 180);
+          const x1 = cx + r * Math.cos(startRad);
+          const y1 = cy + r * Math.sin(startRad);
+          const x2 = cx + r * Math.cos(endRad);
+          const y2 = cy + r * Math.sin(endRad);
+          const large = seg.sweep > 180 ? 1 : 0;
+          const d = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+          return <path key={i} d={d} fill={seg.color} opacity={0.9} />;
+        })}
+        <circle cx={cx} cy={cy} r={r * 0.55} fill={SURFACE} />
+        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fill="#dde6f5" fontSize="18" fontFamily="'Space Mono', monospace">
+          {total}
+        </text>
+      </svg>
+      <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1">
+        {segments.map((seg) => (
+          <span key={seg.status} className="flex items-center gap-1.5 text-xs text-[#4b5875]">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: seg.color }} />
+            {getStatusLabel(seg.status, 'appointment')}
+          </span>
+        ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">نمو المرضى (شهرياً)</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={growthData} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <XAxis dataKey="month" tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <YAxis tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <Tooltip contentStyle={{ backgroundColor: TOOLTIP_BG, border: `1px solid rgba(255,255,255,0.1)`, borderRadius: 8 }} />
-                  <Bar dataKey="count" fill={PURPLE} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">توزيع التشخيصات</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {diagnosisDist.map((d, i) => (
-              <div key={d.name}>
-                <div className="flex justify-between text-sm">
-                  <span className="text-white">{d.name}</span>
-                  <span style={{ fontFamily: "'Space Mono', monospace" }}>{d.count}</span>
-                </div>
-                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/10">
-                  <div className="h-full rounded-full" style={{ width: `${(d.count / maxDist) * 100}%`, backgroundColor: distColors[i % distColors.length] }} />
-                </div>
-              </div>
+    </div>
+  );
+}
+
+function TransportBarChartSVG({ data, maxCount }: { data: { date?: string; dayName: string; count: number }[]; maxCount: number }) {
+  const chartW = 200;
+
+  return (
+    <div className="space-y-2">
+      {data.map((d) => (
+        <div key={d.date ?? d.dayName} className="flex items-center gap-3" style={{ direction: 'rtl' }}>
+          <span className="w-[52px] text-left text-xs text-[#4b5875]">{d.dayName}</span>
+          <div className="flex-1" style={{ maxWidth: chartW }}>
+            <div
+              className="h-6 rounded-md transition-all"
+              style={{
+                width: `${maxCount ? (d.count / maxCount) * 100 : 0}%`,
+                backgroundColor: AMBER,
+                minWidth: d.count ? 8 : 0,
+              }}
+            />
+          </div>
+          <span className="w-8 text-left font-mono text-xs text-[#4b5875]" style={{ fontFamily: "'Space Mono', monospace" }}>
+            {d.count}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RecoveryLineChartSVG({ curves, patients }: { curves: Record<string, RecoveryPoint[]>; patients: Patient[] }) {
+  const patientIds = Object.keys(curves).filter((id) => (curves[id]?.length ?? 0) > 0);
+  const colors = [CYAN, GREEN, PURPLE];
+  const w = 600;
+  const h = 220;
+  const pad = { left: 50, right: 80, top: 20, bottom: 30 };
+  const chartW = w - pad.left - pad.right;
+  const chartH = h - pad.top - pad.bottom;
+
+  const allDates = Array.from(
+    new Set(patientIds.flatMap((id) => (curves[id] ?? []).map((p) => p.date))).values()
+  ).sort();
+  const minDate = allDates[0] ?? '';
+  const maxDate = allDates[allDates.length - 1] ?? minDate;
+  const dateRange = maxDate && minDate ? (new Date(maxDate).getTime() - new Date(minDate).getTime()) / 86400000 : 1;
+
+  const getX = (date: string) => {
+    const t = minDate ? (new Date(date).getTime() - new Date(minDate).getTime()) / 86400000 / dateRange : 0;
+    return pad.left + t * chartW;
+  };
+  const getY = (score: number) => pad.top + chartH - (score / 100) * chartH;
+
+  if (patientIds.length === 0) {
+    return <p className="py-8 text-center text-[#4b5875]">لا توجد بيانات تعافي للفترة المحددة</p>;
+  }
+
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+      <rect width={w} height={h} fill={SURFACE} />
+      <line x1={pad.left} y1={pad.top} x2={pad.left} y2={h - pad.bottom} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+      <line x1={pad.left} y1={h - pad.bottom} x2={w - pad.right} y2={h - pad.bottom} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+      {[0, 25, 50, 75, 100].map((v) => (
+        <text key={v} x={pad.left - 6} y={getY(v)} textAnchor="end" dominantBaseline="middle" fill="#4b5875" fontSize="9" fontFamily="'Space Mono', monospace">
+          {v}
+        </text>
+      ))}
+      {patientIds.map((id, idx) => {
+        const points = (curves[id] ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
+        const color = colors[idx % colors.length];
+        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(p.date)} ${getY(p.recoveryScore)}`).join(' ');
+        const firstX = points[0] ? getX(points[0].date) : pad.left;
+        const lastX = points[points.length - 1] ? getX(points[points.length - 1].date) : pad.left;
+        const bottomY = h - pad.bottom;
+        const areaD = `${pathD} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+        const name = patients.find((p) => p.id === id)?.nameAr ?? id.slice(0, 8);
+        return (
+          <g key={id}>
+            <path d={areaD} fill={color} fillOpacity="0.08" />
+            <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            {points.map((p) => (
+              <circle key={p.date} cx={getX(p.date)} cy={getY(p.recoveryScore)} r="3" fill={color} />
             ))}
-          </CardContent>
-        </Card>
-      </div>
-      <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-        <CardHeader><CardTitle className="text-base text-white">أكثر المرضى تحسناً</CardTitle></CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b" style={{ borderColor: BORDER }}>
-                  <th className="py-2 text-right text-gray-400">المريض</th>
-                  <th className="py-2 text-right text-gray-400">التشخيص</th>
-                  <th className="py-2 text-right text-gray-400">الجلسات</th>
-                  <th className="py-2 text-right text-gray-400">بداية %</th>
-                  <th className="py-2 text-right text-gray-400">حالي %</th>
-                  <th className="py-2 text-right text-gray-400">التحسن</th>
-                </tr>
-              </thead>
-              <tbody>
-                {improving.map(({ patient, start, current, improvement, sessions: s }) => (
-                  <tr key={patient.id} className="border-b" style={{ borderColor: BORDER }}>
-                    <td className="py-2 text-white">{patient.nameAr}</td>
-                    <td className="py-2"><Badge className="bg-cyan-500/20 text-cyan-400 text-xs">{patient.diagnosis || '—'}</Badge></td>
-                    <td className="py-2" style={{ fontFamily: "'Space Mono', monospace" }}>{s}</td>
-                    <td className="py-2" style={{ fontFamily: "'Space Mono', monospace" }}>{start}%</td>
-                    <td className="py-2" style={{ fontFamily: "'Space Mono', monospace" }}>{current}%</td>
-                    <td className="py-2 text-green-400">↑ +{improvement}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function TransportTab({
-  transportRequests,
-  vehicles,
-  dateFrom,
-  dateTo,
-  reportTransportStats,
-}: {
-  transportRequests: TransportRequest[];
-  vehicles: { id: string; plateNumber?: string; status?: string }[];
-  dateFrom: string;
-  dateTo: string;
-  reportTransportStats?: {
-    totalTrips: number;
-    todayTrips: number;
-    byMobilityNeed: { type: string; count: number }[];
-    byVehicle: { vehicleId: string; plate: string; tripCount: number }[];
-  } | null;
-}) {
-  const inRange = transportRequests.filter((r) => r.createdAt >= dateFrom && r.createdAt <= dateTo + 'T23:59:59.999Z');
-  const todayStr = toDateStr(new Date());
-  const totalTrips = reportTransportStats ? reportTransportStats.totalTrips : inRange.length;
-  const todayTrips = reportTransportStats ? reportTransportStats.todayTrips : transportRequests.filter((r) => r.createdAt.startsWith(todayStr)).length;
-  const activeVehicles = vehicles.filter((v) => v.status === 'in_use' || v.status === 'available').length;
-  const walking = reportTransportStats
-    ? (reportTransportStats.byMobilityNeed.find((x) => x.type === 'walking')?.count ?? 0)
-    : inRange.filter((r) => r.mobilityNeed === 'walking' || !r.mobilityNeed).length;
-  const wheelchair = reportTransportStats
-    ? (reportTransportStats.byMobilityNeed.find((x) => x.type === 'wheelchair')?.count ?? 0)
-    : inRange.filter((r) => r.mobilityNeed === 'wheelchair').length;
-  const stretcher = reportTransportStats
-    ? (reportTransportStats.byMobilityNeed.find((x) => x.type === 'stretcher')?.count ?? 0)
-    : inRange.filter((r) => r.mobilityNeed === 'stretcher').length;
-  const totalMob = walking + wheelchair + stretcher || 1;
-
-  const dailyTrips = (() => {
-    const byDay: Record<string, number> = {};
-    inRange.forEach((r) => {
-      const day = r.createdAt.slice(0, 10);
-      byDay[day] = (byDay[day] ?? 0) + 1;
-    });
-    const start = new Date(dateFrom);
-    const end = new Date(dateTo);
-    const out: { day: string; count: number }[] = [];
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = toDateStr(d);
-      out.push({ day: key.slice(8, 10), count: byDay[key] ?? 0 });
-    }
-    return out.slice(-14);
-  })();
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <KPICard label="إجمالي الرحلات" value={totalTrips} icon="🚐" />
-        <KPICard label="رحلات اليوم" value={todayTrips} icon="📅" />
-        <KPICard label="مركبات نشطة" value={activeVehicles} icon="🚗" />
-        <KPICard label="متوسط وقت الرحلة" value="23 د" icon="⏱" />
-        <KPICard label="نسبة الالتزام بالوقت" value="87%" icon="✅" />
-      </div>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">رحلات يومية</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyTrips} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <XAxis dataKey="day" tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <YAxis tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <Tooltip contentStyle={{ backgroundColor: TOOLTIP_BG, border: `1px solid rgba(255,255,255,0.1)`, borderRadius: 8 }} />
-                  <Bar dataKey="count" fill={AMBER} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">الاحتياج (تنقل)</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="flex justify-between text-sm"><span>🚶 مشي</span><span style={{ fontFamily: "'Space Mono', monospace" }}>{walking}</span></div>
-              <div className="mt-1 h-2 w-full rounded-full bg-white/10"><div className="h-full rounded-full bg-cyan-500/70" style={{ width: `${(walking / totalMob) * 100}%` }} /></div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm"><span>♿ كرسي متحرك</span><span style={{ fontFamily: "'Space Mono', monospace" }}>{wheelchair}</span></div>
-              <div className="mt-1 h-2 w-full rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-500/70" style={{ width: `${(wheelchair / totalMob) * 100}%` }} /></div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm"><span>🛏 نقالة</span><span style={{ fontFamily: "'Space Mono', monospace" }}>{stretcher}</span></div>
-              <div className="mt-1 h-2 w-full rounded-full bg-white/10"><div className="h-full rounded-full bg-purple-500/70" style={{ width: `${(stretcher / totalMob) * 100}%` }} /></div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-        <CardHeader><CardTitle className="text-base text-white">أداء الأسطول</CardTitle></CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b" style={{ borderColor: BORDER }}>
-                  <th className="py-2 text-right text-gray-400">لوحة</th>
-                  <th className="py-2 text-right text-gray-400">النوع</th>
-                  <th className="py-2 text-right text-gray-400">السائق</th>
-                  <th className="py-2 text-right text-gray-400">عدد الرحلات</th>
-                  <th className="py-2 text-right text-gray-400">المسافة</th>
-                  <th className="py-2 text-right text-gray-400">متوسط الوقت</th>
-                  <th className="py-2 text-right text-gray-400">التقييم</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vehicles.slice(0, 10).map((v) => (
-                  <tr key={v.id} className="border-b" style={{ borderColor: BORDER }}>
-                    <td className="py-2 font-medium text-white" style={{ fontFamily: "'Space Mono', monospace" }}>{v.plateNumber ?? v.id.slice(0, 8)}</td>
-                    <td className="py-2 text-gray-400">—</td>
-                    <td className="py-2 text-gray-400">—</td>
-                    <td className="py-2" style={{ fontFamily: "'Space Mono', monospace" }}>—</td>
-                    <td className="py-2 text-gray-400">—</td>
-                    <td className="py-2 text-gray-400">—</td>
-                    <td className="py-2"><Badge className="bg-amber-500/20 text-amber-400 text-xs">—</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function FinanceTab() {
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <KPICard label="إيرادات الشهر" value="$18.2K" icon="💰" />
-        <KPICard label="متوسط تكلفة الجلسة" value="$98" icon="💵" />
-        <KPICard label="مستحقات معلقة" value="$3.4K" icon="⏳" />
-        <KPICard label="التأمين محصل" value="$12.8K" icon="🏥" />
-      </div>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">إيرادات أسبوعية</CardTitle></CardHeader>
-          <CardContent>
-            <div className="h-[200px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={[{ w: '1', v: 4 }, { w: '2', v: 5 }, { w: '3', v: 3 }, { w: '4', v: 6 }]} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-                  <XAxis dataKey="w" tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <YAxis tick={{ fill: AXIS_FILL, fontFamily: "'Space Mono', monospace", fontSize: 11 }} stroke={BORDER} />
-                  <Bar dataKey="v" fill={GREEN} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-          <CardHeader><CardTitle className="text-base text-white">مصادر الدخل</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <div className="flex justify-between text-sm"><span>التأمين</span><span style={{ fontFamily: "'Space Mono', monospace" }}>70%</span></div>
-              <div className="mt-1 h-2 w-full rounded-full bg-white/10"><div className="h-full w-[70%] rounded-full bg-cyan-500/70" /></div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm"><span>مباشر</span><span style={{ fontFamily: "'Space Mono', monospace" }}>20%</span></div>
-              <div className="mt-1 h-2 w-full rounded-full bg-white/10"><div className="h-full w-[20%] rounded-full bg-green-500/70" /></div>
-            </div>
-            <div>
-              <div className="flex justify-between text-sm"><span>نقل</span><span style={{ fontFamily: "'Space Mono', monospace" }}>10%</span></div>
-              <div className="mt-1 h-2 w-full rounded-full bg-white/10"><div className="h-full w-[10%] rounded-full bg-amber-500/70" /></div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      <Card className="rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-        <CardHeader><CardTitle className="text-base text-white">الفواتير الأخيرة</CardTitle></CardHeader>
-        <CardContent>
-          <p className="mb-4 text-sm text-gray-400">سيتم ربط البيانات الحقيقية عند بناء نظام الفوترة</p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b" style={{ borderColor: BORDER }}>
-                  <th className="py-2 text-right text-gray-400">#</th>
-                  <th className="py-2 text-right text-gray-400">المريض</th>
-                  <th className="py-2 text-right text-gray-400">الخدمة</th>
-                  <th className="py-2 text-right text-gray-400">المبلغ</th>
-                  <th className="py-2 text-right text-gray-400">التأمين</th>
-                  <th className="py-2 text-right text-gray-400">المتبقي</th>
-                  <th className="py-2 text-right text-gray-400">الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b" style={{ borderColor: BORDER }}>
-                  <td className="py-2 text-gray-400" style={{ fontFamily: "'Space Mono', monospace" }}>—</td>
-                  <td className="py-2 text-gray-400">—</td>
-                  <td className="py-2 text-gray-400">—</td>
-                  <td className="py-2 text-gray-400">—</td>
-                  <td className="py-2 text-gray-400">—</td>
-                  <td className="py-2 text-gray-400">—</td>
-                  <td className="py-2"><Badge className="bg-gray-500/20 text-gray-400 text-xs">—</Badge></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+            <text x={w - pad.right + 8} y={pad.top + 20 + idx * 18} fill={color} fontSize="10" fontFamily="Cairo">
+              {name}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }

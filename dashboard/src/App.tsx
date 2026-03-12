@@ -7,9 +7,11 @@ import { Login } from '@/pages/Login';
 import { Placeholder } from '@/pages/Placeholder';
 import { Patient360 } from '@/pages/Patient360';
 import { Transport } from '@/pages/Transport';
+import { Equipment } from '@/pages/Equipment';
 import { AppointmentsCalendar } from '@/pages/AppointmentsCalendar';
 import { PatientsList } from '@/pages/PatientsList';
 import { Reports } from '@/pages/Reports';
+import { Notifications } from '@/pages/Notifications';
 import { Settings } from '@/pages/Settings';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -36,8 +38,9 @@ function AppRoutesInner() {
         <Route path="patients" element={<PatientsList />} />
         <Route path="patients/:id" element={<Patient360 />} />
         <Route path="transport" element={<Transport />} />
-        <Route path="equipment" element={<Placeholder />} />
+        <Route path="equipment" element={<Equipment />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="settings" element={<Settings />} />
         {/* TODO: Full billing page — استبدال Placeholder عند اكتمال واجهة الفوترة */}
         <Route path="billing" element={<Placeholder />} />

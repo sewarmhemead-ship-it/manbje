@@ -8,38 +8,41 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --border: 214.3 31.8% 91.4%;
+    --background: 6 8% 4%;
+    --foreground: 220 20% 96%;
+    --card: 222 25% 7%;
+    --card-foreground: 220 20% 96%;
+    --primary: 187 92% 57%;
+    --primary-foreground: 222 47% 11%;
+    --muted: 222 25% 12%;
+    --muted-foreground: 220 10% 50%;
+    --border: 0 0% 100% / 0.06;
   }
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --border: 217.2 32.6% 17.5%;
+    --background: 6 8% 4%;
+    --foreground: 220 20% 96%;
+    --card: 222 25% 7%;
+    --card-foreground: 220 20% 96%;
+    --primary: 187 92% 57%;
+    --primary-foreground: 222 47% 11%;
+    --muted: 222 25% 12%;
+    --muted-foreground: 220 10% 50%;
+    --border: 0 0% 100% / 0.06;
   }
 }
 
 body {
-  @apply bg-background text-foreground antialiased;
-  font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif;
+  background: #06080e;
+  color: #dde6f5;
+  font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, sans-serif;
   margin: 0;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
   min-height: 100vh;
+  background: #06080e;
 }
 
 @keyframes slideInLeft {
@@ -79,4 +82,59 @@ body {
 
 .animate-fadeUp {
   animation: fadeUp 0.3s ease-out both;
+}
+
+/* Reports print: hide layout UI, show only report content, white bg */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .reports-page,
+  .reports-page * {
+    visibility: visible;
+  }
+  .reports-page {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    min-height: 100vh;
+    background: #fff !important;
+    color: #1a1a1a !important;
+    padding: 0 !important;
+  }
+  .reports-page header {
+    background: #fff !important;
+    border-color: #ddd !important;
+    color: #1a1a1a !important;
+  }
+  .reports-page h1,
+  .reports-page h3,
+  .reports-page p,
+  .reports-page span,
+  .reports-page td,
+  .reports-page th {
+    color: #1a1a1a !important;
+  }
+  .reports-page .print\\:hidden {
+    display: none !important;
+  }
+  .reports-page [style*="background: #0b0f1a"],
+  .reports-page [style*="background:#0b0f1a"] {
+    background: #f5f5f5 !important;
+    border-color: #ddd !important;
+  }
+  .report-section {
+    page-break-after: always;
+  }
+  .report-section:last-of-type {
+    page-break-after: auto;
+  }
+  aside,
+  nav,
+  .sidebar,
+  [class*="sidebar"],
+  [class*="Sidebar"] {
+    display: none !important;
+  }
 }

@@ -6,9 +6,26 @@ import { Badge } from '@/components/ui/badge';
 import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { MOCK_TRANSPORT_REQUESTS, MOCK_VEHICLES, MOCK_DRIVERS, isDemoMode } from '@/lib/mock-data';
+import { getStatusLabel, getStatusBadgeStyle } from '@/lib/statusLabels';
 
 const STATUS_FILTER = ['all', 'en_route', 'requested', 'assigned', 'arrived_at_center', 'completed'] as const;
 const today = new Date().toISOString().slice(0, 10);
+
+function formatTime(val: string | Date | undefined): string {
+  if (!val) return '';
+  const d = typeof val === 'string' ? new Date(val) : val;
+  return d.toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' });
+}
+
+function getPatientName(r: Record<string, unknown>): string {
+  const p = r.patient as { user?: { nameAr?: string }; nameAr?: string } | undefined;
+  return p?.user?.nameAr ?? p?.nameAr ?? 'غير محدد';
+}
+
+function getDriverName(r: Record<string, unknown>): string {
+  const d = r.driver as { user?: { nameAr?: string } } | undefined;
+  return d?.user?.nameAr ?? '';
+}
 
 export function Transport() {
   const toast = useToast();
@@ -137,15 +154,21 @@ export function Transport() {
             <Card className="border-amber-500/20 bg-[#0b0f1a]">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
+                  {filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <Truck className="h-12 w-12 text-amber-500/50 mb-3" />
+                      <p className="text-[#4b5875]">لا توجد طلبات نقل اليوم</p>
+                    </div>
+                  ) : (
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-amber-500/20">
-                        <th className="px-4 py-3 text-left font-medium text-amber-400">Request</th>
-                        <th className="px-4 py-3 text-left font-medium text-gray-400">Patient</th>
-                        <th className="px-4 py-3 text-left font-medium text-gray-400">Pickup</th>
-                        <th className="px-4 py-3 text-left font-medium text-gray-400">Type</th>
-                        <th className="px-4 py-3 text-left font-medium text-gray-400">Driver</th>
-                        <th className="px-4 py-3 text-left font-medium text-gray-400">Status</th>
+                        <th className="px-4 py-3 text-left font-medium text-amber-400">الطلب</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-400">المريض</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-400">الاستلام</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-400">النوع</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-400">السائق</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-400">الحالة</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -153,27 +176,38 @@ export function Transport() {
                         const x = r as Record<string, unknown>;
                         const isSelected = x.id === selectedId;
                         const status = (x.status as string) ?? '';
+                        const requestId = String(x.id ?? '');
+                        const trpId = 'TRP#' + requestId.slice(-6).toUpperCase();
+                        const pickupAddr = (x.pickupAddress as string) ?? '';
+                        const pickupTimeStr = formatTime((x.pickupTime as string) ?? '');
+                        const pickupDisplay = [pickupAddr, pickupTimeStr].filter(Boolean).join(' · ');
+                        const driverName = getDriverName(x);
+                        const completionStatus = (x.completionStatus as string) ?? '';
+                        const mobilityNeed = (x.mobilityNeed as string) ?? '';
+                        const badgeStyle = getStatusBadgeStyle(status);
                         return (
                           <tr
                             key={x.id as string}
                             className={`cursor-pointer border-b border-amber-500/10 transition ${isSelected ? 'border-l-4 border-l-amber-500 bg-amber-500/10' : 'hover:bg-amber-500/5'}`}
                             onClick={() => setSelectedId(x.id as string)}
                           >
-                            <td className="px-4 py-3 font-mono text-amber-400">TRP#{String(x.id).slice(0, 8)}</td>
-                            <td className="px-4 py-3">{(x.patient as { nameAr?: string })?.nameAr ?? '—'}</td>
-                            <td className="px-4 py-3 text-gray-400">{(x.pickupAddress as string)?.slice(0, 20)}… {x.pickupTime ? new Date(x.pickupTime as string).toLocaleTimeString() : ''}</td>
+                            <td className="px-4 py-3 font-mono text-amber-400">{trpId}</td>
+                            <td className="px-4 py-3 text-[#dde6f5]">{getPatientName(x)}</td>
+                            <td className="px-4 py-3 text-[#4b5875]">{pickupDisplay || '—'}</td>
                             <td className="px-4 py-3">
-                              <Badge variant="outline" className="border-amber-500/30 text-xs">
-                                {(x.completionStatus as string) === 'round_trip' ? '🔄' : (x.completionStatus as string) === 'to_center_only' ? '→' : '←'}
+                              <Badge variant="outline" className="border-amber-500/30 text-xs mr-1">
+                                {completionStatus === 'round_trip' ? '🔄' : completionStatus === 'to_center_only' ? '→' : '←'}
                               </Badge>
-                              <Badge variant="outline" className="ml-1 border-amber-500/30 text-xs">
-                                {(x.mobilityNeed as string) === 'wheelchair' ? '♿' : (x.mobilityNeed as string) === 'stretcher' ? '🛏' : '🚶'}
+                              <Badge variant="outline" className="border-amber-500/30 text-xs">
+                                {mobilityNeed === 'wheelchair' ? '♿' : mobilityNeed === 'stretcher' ? '🛏' : '🚶'}
                               </Badge>
                             </td>
-                            <td className="px-4 py-3">{(x.driver as { user?: { nameAr?: string } })?.user?.nameAr ?? 'Unassigned'}</td>
                             <td className="px-4 py-3">
-                              <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${status === 'en_route' ? 'bg-amber-500/20 text-amber-400 animate-pulse' : status === 'requested' || status === 'assigned' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
-                                {status}
+                              {driverName ? <span className="text-[#dde6f5]">{driverName}</span> : <span className="text-red-400">غير مسند</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium" style={badgeStyle}>
+                                {getStatusLabel(status, 'transport')}
                               </span>
                             </td>
                           </tr>
@@ -181,6 +215,7 @@ export function Transport() {
                       })}
                     </tbody>
                   </table>
+                  )}
                 </div>
               </CardContent>
             </Card>

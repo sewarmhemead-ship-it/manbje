@@ -424,6 +424,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 function RoomsSection({ toast }: { toast: (m: string) => void }) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<'add' | { edit: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [form, setForm] = useState({ roomNumber: '', type: '', isActive: true });
@@ -431,16 +432,17 @@ function RoomsSection({ toast }: { toast: (m: string) => void }) {
 
   const fetchRooms = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const list = await apiGet<Room[]>('/rooms');
       setRooms(Array.isArray(list) ? list : []);
     } catch {
       setRooms([]);
-      toast('فشل تحميل الغرف');
+      setError('تعذر التحميل');
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchRooms();
@@ -503,6 +505,15 @@ function RoomsSection({ toast }: { toast: (m: string) => void }) {
 
       {loading ? (
         <div className="h-48 animate-pulse rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }} />
+      ) : error ? (
+        <Card className="rounded-2xl border p-6" style={{ backgroundColor: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)' }}>
+          <p className="text-amber-200">تعذر التحميل — إعادة المحاولة</p>
+          <Button className="mt-3 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30" onClick={() => fetchRooms()}>إعادة المحاولة</Button>
+        </Card>
+      ) : rooms.length === 0 ? (
+        <Card className="rounded-2xl border p-6" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
+          <p className="text-gray-400">لا توجد غرف. أضف غرفة من الزر أعلاه.</p>
+        </Card>
       ) : (
         <Card className="rounded-2xl border overflow-hidden" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
           <div className="overflow-x-auto">
@@ -585,6 +596,7 @@ function RoomsSection({ toast }: { toast: (m: string) => void }) {
 function EquipmentSection({ toast }: { toast: (m: string) => void }) {
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<'add' | { edit: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', description: '', isAvailable: true });
@@ -592,16 +604,17 @@ function EquipmentSection({ toast }: { toast: (m: string) => void }) {
 
   const fetchEquipment = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const list = await apiGet<Equipment[]>('/equipment');
       setEquipment(Array.isArray(list) ? list : []);
     } catch {
       setEquipment([]);
-      toast('فشل تحميل الأجهزة');
+      setError('تعذر التحميل');
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchEquipment();
@@ -656,6 +669,15 @@ function EquipmentSection({ toast }: { toast: (m: string) => void }) {
 
       {loading ? (
         <div className="h-48 animate-pulse rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }} />
+      ) : error ? (
+        <Card className="rounded-2xl border p-6" style={{ backgroundColor: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)' }}>
+          <p className="text-amber-200">تعذر التحميل — إعادة المحاولة</p>
+          <Button className="mt-3 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30" onClick={() => fetchEquipment()}>إعادة المحاولة</Button>
+        </Card>
+      ) : equipment.length === 0 ? (
+        <Card className="rounded-2xl border p-6" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
+          <p className="text-gray-400">لا توجد أجهزة. أضف جهازاً من الزر أعلاه.</p>
+        </Card>
       ) : (
         <Card className="rounded-2xl border overflow-hidden" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
           <div className="overflow-x-auto">
@@ -739,22 +761,24 @@ const ROLE_COLORS: Record<UserRole, string> = {
 function UsersSection({ toast }: { toast: (m: string) => void }) {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<'add' | { edit: string } | null>(null);
   const [form, setForm] = useState({ nameAr: '', nameEn: '', email: '', phone: '', password: '', role: 'doctor' as UserRole });
   const [saving, setSaving] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const list = await apiGet<User[]>('/users');
       setUsers(Array.isArray(list) ? list : []);
     } catch {
       setUsers([]);
-      toast('فشل تحميل المستخدمين');
+      setError('تعذر التحميل');
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     fetchUsers();
@@ -808,6 +832,15 @@ function UsersSection({ toast }: { toast: (m: string) => void }) {
 
       {loading ? (
         <div className="h-48 animate-pulse rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }} />
+      ) : error ? (
+        <Card className="rounded-2xl border p-6" style={{ backgroundColor: 'rgba(251,191,36,0.08)', borderColor: 'rgba(251,191,36,0.3)' }}>
+          <p className="text-amber-200">تعذر التحميل — إعادة المحاولة</p>
+          <Button className="mt-3 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30" onClick={() => fetchUsers()}>إعادة المحاولة</Button>
+        </Card>
+      ) : users.length === 0 ? (
+        <Card className="rounded-2xl border p-6" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
+          <p className="text-gray-400">لا يوجد مستخدمون. أضف مستخدماً من الزر أعلاه.</p>
+        </Card>
       ) : (
         <Card className="rounded-2xl border overflow-hidden" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
           <div className="overflow-x-auto">

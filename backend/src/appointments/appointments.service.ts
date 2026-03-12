@@ -25,6 +25,7 @@ import {
 } from '../transport/entities/transport-request.entity';
 import { BillingService } from '../billing/billing.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OutboundNotificationsService } from '../notifications/outbound-notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 
 @Injectable()
@@ -40,6 +41,7 @@ export class AppointmentsService {
     private transportRequestsService: TransportRequestsService,
     private billingService: BillingService,
     private notificationsService: NotificationsService,
+    private outboundNotificationsService: OutboundNotificationsService,
   ) {}
 
   async create(dto: CreateAppointmentDto): Promise<Appointment> {
@@ -142,6 +144,24 @@ export class AppointmentsService {
       // ignore
     }
 
+    try {
+      const patient = await this.patientsService.findOne(saved.patientId);
+      const vars = await this.outboundNotificationsService.buildVarsForAppointment(
+        saved.id,
+        patient.nameAr ?? '',
+      );
+      const channel = (patient.phone || '').trim().startsWith('+') ? 'whatsapp' : 'sms';
+      await this.outboundNotificationsService.sendNotification({
+        patientId: saved.patientId,
+        type: 'appointment_confirmed',
+        channel,
+        vars,
+        appointmentId: saved.id,
+      });
+    } catch {
+      // ignore
+    }
+
     if (arrivalType === ArrivalType.CENTER_TRANSPORT && dto.pickupAddress && dto.pickupTime) {
       const completionStatus =
         dto.completionStatus === 'from_center_only'
@@ -230,11 +250,18 @@ export class AppointmentsService {
     return this.enrichAppointmentsWithTransport(list);
   }
 
-  async findByPatient(patientId: string): Promise<Appointment[]> {
+  async findByPatient(
+    patientId: string,
+    status?: string,
+    limit?: number,
+  ): Promise<Appointment[]> {
+    const where: { patientId: string; status?: AppointmentStatus } = { patientId };
+    if (status) where.status = status as AppointmentStatus;
     const list = await this.appointmentsRepo.find({
-      where: { patientId },
+      where,
       relations: { doctor: true, room: true, equipment: true },
-      order: { startTime: 'DESC' },
+      order: { startTime: status === 'scheduled' ? 'ASC' : 'DESC' },
+      take: limit,
     });
     return this.enrichAppointmentsWithTransport(list);
   }
@@ -313,6 +340,18 @@ export class AppointmentsService {
             { appointmentId: appointment.id },
           );
         }
+        const vars = await this.outboundNotificationsService.buildVarsForAppointment(
+          appointment.id,
+          patient.nameAr ?? '',
+        );
+        const channel = (patient.phone || '').trim().startsWith('+') ? 'whatsapp' : 'sms';
+        await this.outboundNotificationsService.sendNotification({
+          patientId: appointment.patientId,
+          type: 'appointment_cancelled',
+          channel,
+          vars,
+          appointmentId: appointment.id,
+        });
       } catch {
         // ignore
       }

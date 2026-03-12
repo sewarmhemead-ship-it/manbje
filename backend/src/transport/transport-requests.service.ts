@@ -16,6 +16,7 @@ import {
 import { CreateTransportRequestDto } from './dto/create-transport-request.dto';
 import { AppointmentsService } from '../appointments/appointments.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { OutboundNotificationsService } from '../notifications/outbound-notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 import { TransportDriver } from './entities/transport-driver.entity';
 import { User } from '../users/entities/user.entity';
@@ -33,6 +34,7 @@ export class TransportRequestsService {
     @Inject(forwardRef(() => AppointmentsService))
     private appointmentsService: AppointmentsService,
     private notificationsService: NotificationsService,
+    private outboundNotificationsService: OutboundNotificationsService,
   ) {}
 
   async create(dto: CreateTransportRequestDto): Promise<TransportRequest> {
@@ -56,7 +58,11 @@ export class TransportRequestsService {
 
   async findAll(): Promise<TransportRequest[]> {
     return this.requestsRepo.find({
-      relations: { patient: true, driver: true, vehicle: true },
+      relations: {
+        patient: { user: true },
+        driver: { user: true, vehicle: true },
+        vehicle: true,
+      },
       order: { createdAt: 'DESC' },
     });
   }
@@ -116,6 +122,13 @@ export class TransportRequestsService {
             { transportRequestId: id, appointmentId: request.appointmentId },
           );
         }
+        const vars = await this.outboundNotificationsService.buildVarsForTransport(id);
+        await this.outboundNotificationsService.sendNotification({
+          patientId: request.patientId,
+          type: 'transport_arrived',
+          channel: 'whatsapp',
+          vars,
+        });
       } catch {
         // ignore
       }
@@ -150,6 +163,13 @@ export class TransportRequestsService {
           { transportRequestId: id },
         );
       }
+      const vars = await this.outboundNotificationsService.buildVarsForTransport(id);
+      await this.outboundNotificationsService.sendNotification({
+        patientId: request.patientId,
+        type: 'transport_assigned',
+        channel: 'whatsapp',
+        vars,
+      });
     } catch {
       // ignore
     }

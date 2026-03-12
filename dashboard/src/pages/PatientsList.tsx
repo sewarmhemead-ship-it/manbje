@@ -37,6 +37,8 @@ export interface Patient {
   assignedDoctor?: { id: string; nameAr?: string | null; nameEn?: string | null } | null;
   arrivalPreference?: string | null;
   createdAt: string;
+  /** من أحدث جلسة أو من API إن وُجد */
+  recoveryScore?: number | null;
 }
 
 function patientIdDisplay(id: string, createdAt: string): string {
@@ -140,7 +142,6 @@ export function PatientsList() {
 
   const handleSearch = () => setSearch(searchInput);
   const totalPages = Math.max(1, Math.ceil(listData.total / limit));
-  const recoveryPlaceholder = 0;
 
   const sortedData = useMemo(() => {
     const d = [...listData.data];
@@ -229,7 +230,6 @@ export function PatientsList() {
                 key={p.id}
                 patient={p}
                 styleIndex={i}
-                recoveryScore={recoveryPlaceholder}
                 onOpenProfile={() => navigate('/patients/' + p.id)}
                 onNewAppointment={() => { toast('موعد جديد — انتقل إلى التقويم'); navigate('/appointments?new=1'); }}
                 onUploadXray={() => { toast('رفع أشعة — انتقل إلى ملف المريض'); navigate('/patients/' + p.id); }}
@@ -322,7 +322,6 @@ export function PatientsList() {
 function PatientCard({
   patient,
   styleIndex,
-  recoveryScore,
   onOpenProfile,
   onNewAppointment,
   onUploadXray,
@@ -330,7 +329,6 @@ function PatientCard({
 }: {
   patient: Patient;
   styleIndex: number;
-  recoveryScore: number;
   onOpenProfile: () => void;
   onNewAppointment: () => void;
   onUploadXray: () => void;
@@ -340,7 +338,14 @@ function PatientCard({
   const gradient = GRADIENT_CYCLES[styleIndex % 5];
   const initials = (patient.nameAr ?? '؟').slice(0, 2);
   const age = ageFromBirth(patient.birthDate);
-  const recoveryColor = recoveryScore > 70 ? GREEN : recoveryScore >= 40 ? AMBER : RED;
+  const score = patient.recoveryScore ?? null;
+  const hasRecoveryData = score != null;
+  const recoveryColor = hasRecoveryData
+    ? (score > 70 ? GREEN : score >= 40 ? AMBER : RED)
+    : '#4b5875';
+  const recoveryBg = hasRecoveryData
+    ? (score > 70 ? 'rgba(52,211,153,0.3)' : score >= 40 ? 'rgba(251,191,36,0.3)' : 'rgba(248,113,113,0.3)')
+    : 'rgba(75,88,117,0.2)';
   const idDisplay = patientIdDisplay(patient.id, patient.createdAt);
   const arrivalIcon = patient.arrivalPreference === 'center_transport' ? '🚐' : '🚶';
 
@@ -393,10 +398,19 @@ function PatientCard({
         <div className="mt-3">
           <div className="flex justify-between text-xs text-gray-400">
             <span>نسبة التعافي</span>
-            <span style={{ fontFamily: "'Space Mono', monospace", color: recoveryColor }}>{recoveryScore}%</span>
+            <span style={{ fontFamily: "'Space Mono', monospace", color: recoveryColor }}>
+              {hasRecoveryData ? `${score}%` : 'لا توجد جلسات بعد'}
+            </span>
           </div>
           <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-white/10">
-            <div className="h-full rounded-full transition-all" style={{ width: `${recoveryScore}%`, backgroundColor: recoveryColor }} />
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: hasRecoveryData ? `${Math.min(100, Math.max(0, score))}%` : '100%',
+                backgroundColor: hasRecoveryData ? recoveryColor : undefined,
+                background: hasRecoveryData ? undefined : recoveryBg,
+              }}
+            />
           </div>
         </div>
         <p className="mt-2 text-xs text-gray-500">آخر جلسة: —</p>

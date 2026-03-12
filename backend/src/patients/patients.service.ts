@@ -106,4 +106,11 @@ export class PatientsService {
     Object.assign(patient, dto);
     return this.patientsRepo.save(patient);
   }
+
+  async updatePushToken(patientId: string, token: string): Promise<Patient> {
+    const patient = await this.patientsRepo.findOne({ where: { id: patientId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+    patient.pushToken = token;
+    return this.patientsRepo.save(patient);
+  }
 }

@@ -71,6 +71,8 @@ export class AppointmentsController {
   @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT)
   async findByPatient(
     @Param('patientId', ParseUUIDPipe) patientId: string,
+    @Query('status') status: string,
+    @Query('limit') limit: string,
     @CurrentUser() user: User,
   ) {
     if (user.role === UserRole.PATIENT) {
@@ -79,7 +81,7 @@ export class AppointmentsController {
         throw new ForbiddenException('You can only view your own appointments');
       }
     }
-    return this.appointmentsService.findByPatient(patientId);
+    return this.appointmentsService.findByPatient(patientId, status || undefined, limit ? parseInt(limit, 10) : undefined);
   }
 
   @Get(':id')

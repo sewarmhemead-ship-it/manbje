@@ -31,11 +31,17 @@ import { Invoice } from '../billing/entities/invoice.entity';
 import { InvoiceItem } from '../billing/entities/invoice-item.entity';
 import { Payment } from '../billing/entities/payment.entity';
 import { Notification } from '../notifications/entities/notification.entity';
+import { OutboundNotification } from '../notifications/entities/outbound-notification.entity';
 
 config({ path: resolve(__dirname, '../../.env') });
 
 const DEFAULT_ADMIN_EMAIL = 'admin@example.com';
 const DEFAULT_ADMIN_PASSWORD = 'Admin123!';
+
+const DEFAULT_PATIENT_EMAIL = 'patient@example.com';
+const DEFAULT_PATIENT_PHONE = '+966501234567';
+const DEFAULT_PATIENT_PASSWORD = 'Patient123!';
+const DEFAULT_PATIENT_NAME = 'مريض تجريبي';
 
 const dataSource = new DataSource({
   type: 'postgres',
@@ -55,6 +61,7 @@ const dataSource = new DataSource({
   entities: [
     User,
     Patient,
+    OutboundNotification,
     Room,
     Equipment,
     Schedule,
@@ -79,26 +86,55 @@ const dataSource = new DataSource({
 dataSource
   .initialize()
   .then(async () => {
-    const repo = dataSource.getRepository(User);
-    const existing = await repo.findOne({ where: { email: DEFAULT_ADMIN_EMAIL } });
-    if (existing) {
-      console.log('Admin user already exists:', DEFAULT_ADMIN_EMAIL);
-      return dataSource.destroy();
-    }
-    const passwordHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
-    await repo.save(
-      repo.create({
+    const userRepo = dataSource.getRepository(User);
+    const patientRepo = dataSource.getRepository(Patient);
+
+    // أدمن
+    let admin = await userRepo.findOne({ where: { email: DEFAULT_ADMIN_EMAIL } });
+    if (!admin) {
+      const passwordHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
+      admin = userRepo.create({
         email: DEFAULT_ADMIN_EMAIL,
         passwordHash,
         role: UserRole.ADMIN,
         nameAr: 'مدير النظام',
         nameEn: 'Admin',
         isActive: true,
-      }),
-    );
-    console.log('Default admin created.');
-    console.log('  Email:', DEFAULT_ADMIN_EMAIL);
-    console.log('  Password:', DEFAULT_ADMIN_PASSWORD);
+      });
+      await userRepo.save(admin);
+      console.log('Default admin created.');
+      console.log('  Email:', DEFAULT_ADMIN_EMAIL);
+      console.log('  Password:', DEFAULT_ADMIN_PASSWORD);
+    } else {
+      console.log('Admin user already exists:', DEFAULT_ADMIN_EMAIL);
+    }
+
+    // مريض تجريبي (لتسجيل الدخول من تطبيق المريض)
+    let patientUser = await userRepo.findOne({ where: { email: DEFAULT_PATIENT_EMAIL } });
+    if (!patientUser) {
+      const passwordHash = await bcrypt.hash(DEFAULT_PATIENT_PASSWORD, 10);
+      patientUser = userRepo.create({
+        email: DEFAULT_PATIENT_EMAIL,
+        passwordHash,
+        role: UserRole.PATIENT,
+        nameAr: DEFAULT_PATIENT_NAME,
+        phone: DEFAULT_PATIENT_PHONE,
+        isActive: true,
+      });
+      await userRepo.save(patientUser);
+      const patientRecord = patientRepo.create({
+        userId: patientUser.id,
+        nameAr: DEFAULT_PATIENT_NAME,
+        phone: DEFAULT_PATIENT_PHONE,
+      });
+      await patientRepo.save(patientRecord);
+      console.log('Default patient created.');
+      console.log('  Phone:', DEFAULT_PATIENT_PHONE);
+      console.log('  Password:', DEFAULT_PATIENT_PASSWORD);
+    } else {
+      console.log('Patient user already exists:', DEFAULT_PATIENT_EMAIL);
+    }
+
     return dataSource.destroy();
   })
   .then(() => {

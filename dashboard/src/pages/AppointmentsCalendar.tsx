@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Plus, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiGet, apiPost, apiPatch } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { MOCK_APPOINTMENTS, MOCK_USERS_DOCTORS, isDemoMode } from '@/lib/mock-data';
+import { getStatusLabel, getStatusBadgeStyle } from '@/lib/statusLabels';
 import type { Appointment, User as ApiUser } from '@/lib/api';
 
 const ACCENT = '#22d3ee';
@@ -19,8 +19,8 @@ const TOTAL_MINUTES = (LAST_HOUR - FIRST_HOUR) * 60;
 const DAY_NAMES_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const STATUS_OPTIONS = [
   { value: 'scheduled', label: 'مجدول' },
-  { value: 'in_progress', label: 'في الجلسة' },
-  { value: 'in_transit', label: 'قيد النقل' },
+  { value: 'in_progress', label: 'جلسة نشطة' },
+  { value: 'in_transit', label: 'في الطريق' },
   { value: 'completed', label: 'مكتمل' },
   { value: 'cancelled', label: 'ملغى' },
 ];
@@ -652,7 +652,7 @@ function DetailPanel({
 }) {
   const [updating, setUpdating] = useState(false);
   const tr = appointment.transportRequest;
-  const statusColor = appointment.status === 'completed' ? 'bg-green-500/20 text-green-400' : appointment.status === 'in_progress' ? 'bg-blue-500/20 text-blue-400' : appointment.status === 'cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-cyan-500/20 text-cyan-400';
+  const statusBadgeStyle = getStatusBadgeStyle(appointment.status);
 
   const startSession = async () => {
     setUpdating(true);
@@ -697,7 +697,9 @@ function DetailPanel({
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div>
             <p className="text-xl font-medium text-white">{appointment.patient?.nameAr ?? appointment.patientId}</p>
-            <Badge className={`mt-1 ${statusColor}`}>{appointment.status}</Badge>
+            <span className="mt-1 inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" style={statusBadgeStyle}>
+              {getStatusLabel(appointment.status, 'appointment')}
+            </span>
           </div>
           <div className="text-sm text-gray-400">
             <p>الوقت: {new Date(appointment.startTime).toLocaleTimeString('ar-SA')} – {new Date(appointment.endTime).toLocaleTimeString('ar-SA')}</p>
