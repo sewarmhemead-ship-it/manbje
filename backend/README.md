@@ -47,6 +47,17 @@ npm run start:prod
 | POST | `/auth/login` | تسجيل الدخول (body: email, password) → يرجع user + accessToken |
 | GET | `/auth/me` | المستخدم الحالي (يتطلب Authorization: Bearer &lt;token&gt;) |
 
+### بيانات تسجيل الدخول الافتراضية (للتجربة)
+
+بعد تشغيل `npm run db:seed` من مجلد `backend` يمكنك الدخول بهذه البيانات:
+
+| الحقل | القيمة |
+|--------|--------|
+| **البريد الإلكتروني** | `admin@example.com` |
+| **كلمة المرور** | `Admin123!` |
+
+(الملف `بيانات-تسجيل-الدخول.txt` في مجلد backend يكرر نفس البيانات.)
+
 ## الأدوار (Roles)
 
 - `admin` — إدارة كاملة، عرض قائمة المستخدمين.
