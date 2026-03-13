@@ -85,7 +85,10 @@ export class TransportRequestsService {
       relations: { driver: true, vehicle: true },
     });
     const map = new Map<string, TransportRequest>();
-    for (const r of list) map.set(r.appointmentId, r);
+    for (const r of list) {
+      const aid = r.appointmentId ?? '';
+      if (aid) map.set(aid, r);
+    }
     return map;
   }
 
@@ -111,7 +114,8 @@ export class TransportRequestsService {
         minute: '2-digit',
       });
       const note = `المريض وصل إلى المركز عبر خدمة النقل في تمام الساعة ${timeStr}.`;
-      await this.appointmentsService.appendNote(request.appointmentId, note);
+      const appointmentId = request.appointmentId ?? '';
+      if (appointmentId) await this.appointmentsService.appendNote(appointmentId, note);
       try {
         const admin = await this.usersRepo.findOne({
           where: { role: UserRole.ADMIN },
