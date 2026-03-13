@@ -46,8 +46,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
     if (!user.isActive) {
-      throw new UnauthorizedException('Account is disabled');
+      throw new UnauthorizedException('هذا الحساب معطل. تواصل مع المدير');
     }
+    await this.usersService.updateLastLoginAt(user.id);
     const accessToken = this.jwtService.sign({
       sub: user.id,
       email: user.email,

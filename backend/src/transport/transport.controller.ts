@@ -7,6 +7,7 @@ import {
   Param,
   UseGuards,
   ParseUUIDPipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import { TransportVehiclesService } from './transport-vehicles.service';
 import { TransportDriversService } from './transport-drivers.service';
@@ -15,8 +16,11 @@ import { CreateTransportRequestDto } from './dto/create-transport-request.dto';
 import { UpdateTransportStatusDto } from './dto/update-transport-status.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
-import { UserRole } from '../users/entities/user.entity';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { User, UserRole } from '../users/entities/user.entity';
 import { VehicleAccommodationType } from './entities/transport-vehicle.entity';
 
 @Controller('transport')
@@ -29,15 +33,15 @@ export class TransportController {
   ) {}
 
   @Get('vehicles')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_manage')
   getVehicles() {
     return this.vehiclesService.findAll();
   }
 
   @Post('vehicles')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_manage')
   createVehicle(
     @Body()
     body: {
@@ -65,15 +69,15 @@ export class TransportController {
   }
 
   @Get('drivers')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DRIVER)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_view')
   getDrivers() {
     return this.driversService.findAll();
   }
 
   @Post('drivers')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_manage')
   createDriver(
     @Body() body: { userId: string; vehicleId?: string; licenseNumber?: string },
   ) {
@@ -91,29 +95,44 @@ export class TransportController {
   }
 
   @Get('requests')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  listRequests() {
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_view')
+  async listRequests(@CurrentUser() user: User) {
+    if (user.role === UserRole.DRIVER) {
+      const driver = await this.driversService.findByUserId(user.id);
+      if (!driver) return [];
+      return this.requestsService.findAll(driver.id);
+    }
     return this.requestsService.findAll();
   }
 
   @Post('requests')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_manage')
   createRequest(@Body() dto: CreateTransportRequestDto) {
     return this.requestsService.create(dto);
   }
 
   @Get('requests/:id')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.DRIVER)
-  getRequest(@Param('id', ParseUUIDPipe) id: string) {
-    return this.requestsService.findOne(id);
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_view')
+  async getRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ) {
+    const request = await this.requestsService.findOne(id);
+    if (user.role === UserRole.DRIVER) {
+      const driver = await this.driversService.findByUserId(user.id);
+      if (!driver || request.driverId !== driver.id) {
+        throw new ForbiddenException('You can only view your assigned trips');
+      }
+    }
+    return request;
   }
 
   @Patch('requests/:id/status')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DRIVER)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_driver')
   updateRequestStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTransportStatusDto,
@@ -122,8 +141,8 @@ export class TransportController {
   }
 
   @Patch('requests/:id/assign')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('transport_manage')
   assignDriver(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { driverId: string; vehicleId: string },

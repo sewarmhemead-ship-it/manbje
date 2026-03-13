@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Appointment } from './entities/appointment.entity';
 import { AppointmentsService } from './appointments.service';
 import { AppointmentsController } from './appointments.controller';
+import { AuthModule } from '../auth/auth.module';
 import { SchedulesModule } from '../schedules/schedules.module';
 import { RoomsModule } from '../rooms/rooms.module';
 import { EquipmentModule } from '../equipment/equipment.module';
@@ -13,6 +14,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
+    AuthModule,
     TypeOrmModule.forFeature([Appointment]),
     SchedulesModule,
     RoomsModule,

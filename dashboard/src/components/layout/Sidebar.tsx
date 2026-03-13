@@ -8,24 +8,35 @@ import {
   Wrench,
   FileText,
   Bell,
+  Pill,
   Settings,
+  DollarSign,
+  UserCog,
+  Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiGet } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
-const nav = [
-  { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard, end: true },
-  { to: '/appointments', label: 'المواعيد', icon: Calendar, end: true },
-  { to: '/patients', label: 'المرضى', icon: Users, end: false },
-  { to: '/transport', label: 'النقل', icon: Truck, end: true },
-  { to: '/equipment', label: 'الأجهزة', icon: Wrench, end: true },
-  { to: '/reports', label: 'التقارير', icon: FileText, end: true },
-  { to: '/notifications', label: 'الإشعارات', icon: Bell, end: true, badgeKey: 'notifications' },
-  { to: '/settings', label: 'الإعدادات', icon: Settings, end: true },
+const NAV_ITEMS = [
+  { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard, end: true, permission: null as string | null },
+  { to: '/receptionist', label: 'الاستقبال', icon: Building2, end: true, permission: 'receptionist_portal' },
+  { to: '/appointments', label: 'المواعيد', icon: Calendar, end: true, permission: 'appointments_view' },
+  { to: '/patients', label: 'المرضى', icon: Users, end: false, permission: 'patients_view' },
+  { to: '/transport', label: 'النقل', icon: Truck, end: true, permission: 'transport_view' },
+  { to: '/equipment', label: 'الأجهزة', icon: Wrench, end: true, permission: 'patients_view' },
+  { to: '/reports', label: 'التقارير', icon: FileText, end: true, permission: 'reports_view' },
+  { to: '/notifications', label: 'الإشعارات', icon: Bell, end: true, badgeKey: 'notifications', permission: 'notifications_view' },
+  { to: '/prescriptions', label: 'الوصفات', icon: Pill, end: true, permission: 'prescriptions_view' },
+  { to: '/billing', label: 'الفوترة', icon: DollarSign, end: true, permission: 'billing_view' },
+  { to: '/users', label: 'المستخدمون', icon: UserCog, end: true, permission: 'users_view' },
+  { to: '/settings', label: 'الإعدادات', icon: Settings, end: true, permission: 'settings_view' },
 ];
 
 export function Sidebar() {
+  const { hasPermission } = useAuth();
   const [failedCount, setFailedCount] = useState(0);
+  const nav = NAV_ITEMS.filter((item) => !item.permission || hasPermission(item.permission));
   useEffect(() => {
     apiGet<{ failed: number }>('/notifications/stats').then((s) => setFailedCount(s.failed ?? 0)).catch(() => {});
   }, []);

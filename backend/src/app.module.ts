@@ -17,6 +17,7 @@ import { TransportModule } from './transport/transport.module';
 import { ReportsModule } from './reports/reports.module';
 import { BillingModule } from './billing/billing.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 @Module({
@@ -49,6 +50,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
     ReportsModule,
     BillingModule,
     NotificationsModule,
+    PrescriptionsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

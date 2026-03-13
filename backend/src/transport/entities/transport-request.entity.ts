@@ -37,8 +37,8 @@ export class TransportRequest {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'appointment_id', type: 'uuid' })
-  appointmentId: string;
+  @Column({ name: 'appointment_id', type: 'uuid', nullable: true })
+  appointmentId: string | null;
 
   @Column({ name: 'patient_id', type: 'uuid' })
   patientId: string;

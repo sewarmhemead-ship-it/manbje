@@ -52,7 +52,7 @@ export async function apiUpload<T>(
   return res.json();
 }
 
-export type UserRole = 'admin' | 'doctor' | 'patient' | 'driver';
+export type UserRole = 'admin' | 'doctor' | 'nurse' | 'receptionist' | 'driver' | 'patient';
 
 export interface User {
   id: string;

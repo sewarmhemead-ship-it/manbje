@@ -89,6 +89,31 @@ export interface ClinicalSession {
   };
 }
 
+export interface PrescriptionItem {
+  id: string;
+  drugId: string;
+  dose: number;
+  doseUnit: string;
+  frequency: string;
+  durationDays: number;
+  timing?: string | null;
+  drug?: { nameAr: string };
+}
+
+export interface Prescription {
+  id: string;
+  rxNumber: string;
+  status: string;
+  expiresAt?: string | null;
+  createdAt: string;
+  items?: PrescriptionItem[];
+}
+
+export async function getMyPrescriptions(patientId: string): Promise<Prescription[]> {
+  const { data } = await api.get<Prescription[]>(`/prescriptions/patient/${patientId}`);
+  return Array.isArray(data) ? data : [];
+}
+
 export async function getMyAppointments(patientId: string, status?: string, limit?: number): Promise<Appointment[]> {
   const params = new URLSearchParams();
   if (status) params.set('status', status);

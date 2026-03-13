@@ -192,7 +192,7 @@ function ProfileSection({ toast }: { toast: (m: string) => void }) {
   if (!user) return null;
 
   const initials = (user.nameAr ?? user.email).slice(0, 2);
-  const roleLabel = { admin: 'مدير', doctor: 'طبيب', patient: 'مريض', driver: 'سائق' }[user.role] ?? user.role;
+  const roleLabel = { admin: 'مدير', doctor: 'طبيب', nurse: 'ممرض', receptionist: 'استقبال', driver: 'سائق', patient: 'مريض' }[user.role] ?? user.role;
 
   return (
     <div className="space-y-6">
@@ -754,8 +754,10 @@ function EquipmentSection({ toast }: { toast: (m: string) => void }) {
 const ROLE_COLORS: Record<UserRole, string> = {
   admin: 'bg-purple-500/30 text-purple-300',
   doctor: 'bg-cyan-500/20 text-cyan-400',
+  nurse: 'bg-green-500/20 text-green-400',
+  receptionist: 'bg-amber-500/20 text-amber-400',
+  driver: 'bg-red-500/20 text-red-400',
   patient: 'bg-gray-500/20 text-gray-400',
-  driver: 'bg-amber-500/20 text-amber-400',
 };
 
 function UsersSection({ toast }: { toast: (m: string) => void }) {
@@ -820,7 +822,7 @@ function UsersSection({ toast }: { toast: (m: string) => void }) {
     }
   };
 
-  const roleLabel = (r: UserRole) => ({ admin: 'مدير', doctor: 'طبيب', patient: 'مريض', driver: 'سائق' }[r] ?? r);
+  const roleLabel = (r: UserRole) => ({ admin: 'مدير', doctor: 'طبيب', nurse: 'ممرض', receptionist: 'استقبال', driver: 'سائق', patient: 'مريض' }[r] ?? r);
   const formatDate = (d: string | undefined) => (d ? new Date(d).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' }) : '—');
 
   return (

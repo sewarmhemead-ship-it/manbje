@@ -34,8 +34,12 @@ const todayEnd = () => {
 };
 
 export function Dashboard() {
-  const { user } = useAuth();
+  const { user, isRole } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = isRole('admin');
+  const isDoctor = isRole('doctor');
+  const isReceptionist = isRole('receptionist');
+  const isNurse = isRole('nurse');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     todayAppointments: 0,
@@ -54,7 +58,7 @@ export function Dashboard() {
       return;
     }
     try {
-      const doctorId = user?.role === 'admin' ? undefined : user?.id;
+      const doctorId = isAdmin ? undefined : user?.id;
       const start = todayStart();
       const end = todayEnd();
       const weekEnd = new Date();
@@ -67,7 +71,7 @@ export function Dashboard() {
             )
           : apiGet<Appointment[]>(`/appointments?startDate=${start}&endDate=${end}`).catch(() => []),
         getTransportRequests(),
-        user?.role === 'admin'
+        isAdmin
           ? apiGet<{ totalRevenue: number; totalPaid: number; totalPending: number }>(
               `/billing/stats?startDate=${start}&endDate=${weekEndStr}`
             ).catch(() => ({ totalRevenue: 0, totalPaid: 0, totalPending: 0 }))
@@ -290,22 +294,25 @@ export function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-2">
             {[
-              { label: 'موعد جديد', icon: CalendarPlus, path: '/appointments?new=1' },
-              { label: 'إضافة مريض', icon: UserPlus, path: '/patients?new=1' },
-              { label: 'تعيين نقل', icon: Car, path: '/transport' },
-              { label: 'رفع أشعة', icon: FileImage, path: '/patients' },
-              { label: 'التقارير', icon: FileText, path: '/reports' },
-            ].map(({ label, icon: Icon, path }) => (
-              <Button
-                key={path}
-                variant="outline"
-                className="w-full justify-start gap-3 rounded-xl border-cyan-500/30 text-cyan-400"
-                onClick={() => navigate(path)}
-              >
-                <Icon className="h-5 w-5" />
-                {label}
-              </Button>
-            ))}
+              (isAdmin || isReceptionist || isDoctor) && { label: 'موعد جديد', icon: CalendarPlus, path: '/appointments?new=1' },
+              (isAdmin || isReceptionist) && { label: 'إضافة مريض', icon: UserPlus, path: '/patients?new=1' },
+              (isAdmin || isReceptionist) && { label: 'تعيين نقل', icon: Car, path: '/transport' },
+              (isAdmin || isDoctor || isNurse) && { label: 'رفع أشعة', icon: FileImage, path: '/patients' },
+              (isAdmin || isDoctor) && { label: 'التقارير', icon: FileText, path: '/reports' },
+            ].filter(Boolean).map((item) => {
+              const { label, icon: Icon, path } = item as { label: string; icon: typeof FileText; path: string };
+              return (
+                <Button
+                  key={path}
+                  variant="outline"
+                  className="w-full justify-start gap-3 rounded-xl border-cyan-500/30 text-cyan-400"
+                  onClick={() => navigate(path)}
+                >
+                  <Icon className="h-5 w-5" />
+                  {label}
+                </Button>
+              );
+            })}
           </CardContent>
         </Card>
       </div>

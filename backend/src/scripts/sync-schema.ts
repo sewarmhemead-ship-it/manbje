@@ -27,6 +27,9 @@ import { InvoiceItem } from '../billing/entities/invoice-item.entity';
 import { Payment } from '../billing/entities/payment.entity';
 import { Notification } from '../notifications/entities/notification.entity';
 import { OutboundNotification } from '../notifications/entities/outbound-notification.entity';
+import { Drug } from '../prescriptions/entities/drug.entity';
+import { Prescription } from '../prescriptions/entities/prescription.entity';
+import { PrescriptionItem } from '../prescriptions/entities/prescription-item.entity';
 
 config({ path: resolve(__dirname, '../../.env') });
 
@@ -67,6 +70,9 @@ const dataSource = new DataSource({
     Payment,
     Notification,
     OutboundNotification,
+    Drug,
+    Prescription,
+    PrescriptionItem,
   ],
   synchronize: true,
   logging: true,

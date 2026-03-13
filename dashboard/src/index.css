@@ -138,3 +138,41 @@ body {
     display: none !important;
   }
 }
+
+/* Prescription print: show only .rx-print-area, white bg, RTL */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .rx-print-area,
+  .rx-print-area * {
+    visibility: visible;
+  }
+  .rx-print-area {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    min-height: 100vh;
+    background: #fff !important;
+    color: #000 !important;
+    font-family: Arial, sans-serif;
+    direction: rtl;
+    padding: 24px !important;
+  }
+  .rx-print-area p,
+  .rx-print-area span,
+  .rx-print-area td,
+  .rx-print-area th {
+    color: #000 !important;
+  }
+  .rx-print-area table {
+    border-color: #333 !important;
+  }
+  .rx-print-area th,
+  .rx-print-area td {
+    border: 1px solid #333;
+    padding: 8px;
+  }
+}

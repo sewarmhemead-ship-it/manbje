@@ -5,9 +5,10 @@ export class CreateUserDto {
   @IsEmail()
   email: string;
 
+  @IsOptional()
   @IsString()
   @MinLength(6, { message: 'Password must be at least 6 characters' })
-  password: string;
+  password?: string;
 
   @IsEnum(UserRole)
   role: UserRole;
@@ -23,4 +24,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  specialty?: string;
 }

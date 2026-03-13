@@ -12,6 +12,7 @@ export interface CreateUserData {
   nameAr?: string | null;
   nameEn?: string | null;
   phone?: string | null;
+  specialty?: string | null;
 }
 
 @Injectable()
@@ -24,6 +25,35 @@ export class UsersService {
   async create(data: CreateUserData): Promise<User> {
     const user = this.usersRepo.create(data);
     return this.usersRepo.save(user);
+  }
+
+  /** Admin creates staff: auto temp password = last 4 digits of phone if password not provided. */
+  async createUser(dto: {
+    email: string;
+    password?: string;
+    role: User['role'];
+    nameAr?: string | null;
+    nameEn?: string | null;
+    phone?: string | null;
+    specialty?: string | null;
+  }): Promise<{ user: User; tempPassword: string }> {
+    const existing = await this.findByEmail(dto.email);
+    if (existing) throw new ConflictException('Email already registered');
+    const tempPassword =
+      dto.password && dto.password.length >= 6
+        ? dto.password
+        : (dto.phone ?? '').replace(/\D/g, '').slice(-4).padStart(4, '0') || '0000';
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    const user = await this.create({
+      email: dto.email.toLowerCase(),
+      passwordHash,
+      role: dto.role,
+      nameAr: dto.nameAr ?? null,
+      nameEn: dto.nameEn ?? null,
+      phone: dto.phone ?? null,
+      specialty: dto.specialty ?? null,
+    });
+    return { user, tempPassword };
   }
 
   async createWithPassword(
@@ -59,6 +89,7 @@ export class UsersService {
     }
     if (dto.phone !== undefined) user.phone = dto.phone;
     if (dto.isActive !== undefined) user.isActive = dto.isActive;
+    if (dto.specialty !== undefined) user.specialty = dto.specialty;
     return this.usersRepo.save(user);
   }
 
@@ -78,10 +109,45 @@ export class UsersService {
     return this.usersRepo.findOne({ where: { id } });
   }
 
-  async findAll(): Promise<User[]> {
-    return this.usersRepo.find({
-      order: { createdAt: 'DESC' },
-      select: ['id', 'email', 'role', 'nameAr', 'nameEn', 'phone', 'isActive', 'createdAt'] as (keyof User)[],
-    });
+  async updateLastLoginAt(id: string): Promise<void> {
+    await this.usersRepo.update(id, { lastLoginAt: new Date() });
+  }
+
+  async findAll(filters: { role?: User['role']; isActive?: boolean; search?: string } = {}): Promise<User[]> {
+    const qb = this.usersRepo
+      .createQueryBuilder('u')
+      .orderBy('u.created_at', 'DESC');
+    if (filters.role) qb.andWhere('u.role = :role', { role: filters.role });
+    if (filters.isActive !== undefined) qb.andWhere('u.is_active = :isActive', { isActive: filters.isActive });
+    if (filters.search?.trim()) {
+      qb.andWhere(
+        '(u.name_ar ILIKE :search OR u.name_en ILIKE :search OR u.email ILIKE :search OR u.phone ILIKE :search)',
+        { search: `%${filters.search.trim()}%` }
+      );
+    }
+    return qb.getMany();
+  }
+
+  async updateRole(id: string, role: User['role']): Promise<User> {
+    const user = await this.usersRepo.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+    user.role = role;
+    return this.usersRepo.save(user);
+  }
+
+  async toggleActive(id: string, deactivatedBy?: string): Promise<User> {
+    const user = await this.usersRepo.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+    user.isActive = !user.isActive;
+    user.deactivatedAt = user.isActive ? null : new Date();
+    user.deactivatedBy = user.isActive ? null : deactivatedBy ?? null;
+    return this.usersRepo.save(user);
+  }
+
+  async resetPassword(id: string, newPassword: string): Promise<void> {
+    const user = await this.usersRepo.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.usersRepo.update(id, { passwordHash });
   }
 }

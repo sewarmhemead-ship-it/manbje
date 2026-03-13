@@ -38,14 +38,16 @@ export class TransportRequestsService {
   ) {}
 
   async create(dto: CreateTransportRequestDto): Promise<TransportRequest> {
-    const existing = await this.requestsRepo.findOne({
-      where: { appointmentId: dto.appointmentId },
-    });
-    if (existing) {
-      throw new ConflictException('A transport request already exists for this appointment');
+    if (dto.appointmentId) {
+      const existing = await this.requestsRepo.findOne({
+        where: { appointmentId: dto.appointmentId },
+      });
+      if (existing) {
+        throw new ConflictException('A transport request already exists for this appointment');
+      }
     }
     const request = this.requestsRepo.create({
-      appointmentId: dto.appointmentId,
+      appointmentId: dto.appointmentId ?? null,
       patientId: dto.patientId,
       pickupAddress: dto.pickupAddress,
       pickupTime: new Date(dto.pickupTime),
@@ -56,8 +58,10 @@ export class TransportRequestsService {
     return this.requestsRepo.save(request);
   }
 
-  async findAll(): Promise<TransportRequest[]> {
+  async findAll(driverId?: string): Promise<TransportRequest[]> {
+    const where = driverId ? { driverId } : {};
     return this.requestsRepo.find({
+      where,
       relations: {
         patient: { user: true },
         driver: { user: true, vehicle: true },

@@ -17,6 +17,8 @@ import { ClinicalSessionsService } from '../clinical-sessions/clinical-sessions.
 import { ExercisesService } from '../exercises/exercises.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -31,15 +33,15 @@ export class PatientsController {
   ) {}
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('patients_create')
   create(@Body() dto: CreatePatientDto) {
     return this.patientsService.create(dto);
   }
 
   @Get()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('patients_view')
   findAll(
     @Query('search') search?: string,
     @Query('page') page?: string,
@@ -56,8 +58,8 @@ export class PatientsController {
   }
 
   @Get('stats')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('patients_view')
   getStats() {
     return this.patientsService.getStats();
   }
@@ -141,8 +143,8 @@ export class PatientsController {
   }
 
   @Patch(':id')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('patients_edit')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePatientDto,

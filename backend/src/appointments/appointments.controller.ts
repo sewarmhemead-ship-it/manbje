@@ -16,6 +16,8 @@ import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentStatusDto } from './dto/update-appointment-status.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
@@ -30,28 +32,32 @@ export class AppointmentsController {
   ) {}
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('appointments_create')
   create(@Body() dto: CreateAppointmentDto) {
     return this.appointmentsService.create(dto);
   }
 
   @Get()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  findAll(
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('appointments_view')
+  async findAll(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
+    @CurrentUser() user: User,
   ) {
     if (!startDate || !endDate) {
       throw new BadRequestException('startDate and endDate are required');
+    }
+    if (user.role === UserRole.DOCTOR) {
+      return this.appointmentsService.findByDoctor(user.id, startDate, endDate);
     }
     return this.appointmentsService.findAllInRange(startDate, endDate);
   }
 
   @Get('doctor/:doctorId')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('appointments_view')
   async findByDoctor(
     @Param('doctorId', ParseUUIDPipe) doctorId: string,
     @Query('startDate') startDate: string,
@@ -67,8 +73,8 @@ export class AppointmentsController {
   }
 
   @Get('patient/:patientId')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('appointments_view')
   async findByPatient(
     @Param('patientId', ParseUUIDPipe) patientId: string,
     @Query('status') status: string,
@@ -85,8 +91,8 @@ export class AppointmentsController {
   }
 
   @Get(':id')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('appointments_view')
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
@@ -105,8 +111,8 @@ export class AppointmentsController {
   }
 
   @Patch(':id/status')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('appointments_edit')
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAppointmentStatusDto,

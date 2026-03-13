@@ -12,8 +12,9 @@ import {
 } from '../entities/transport-request.entity';
 
 export class CreateTransportRequestDto {
+  @IsOptional()
   @IsUUID()
-  appointmentId: string;
+  appointmentId?: string;
 
   @IsUUID()
   patientId: string;

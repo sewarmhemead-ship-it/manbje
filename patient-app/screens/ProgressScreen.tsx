@@ -5,7 +5,7 @@ import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { C, radius, fontMono } from '../constants/theme';
-import { getMyProgress, getClinicalSessions, type ProgressPoint, type ClinicalSession } from '../services/api';
+import { getMyProgress, getClinicalSessions, getMyPrescriptions, type ProgressPoint, type ClinicalSession, type Prescription } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_W = SCREEN_WIDTH - 32;
@@ -16,6 +16,7 @@ export function ProgressScreen() {
   const { patient } = useAuth();
   const [points, setPoints] = useState<ProgressPoint[]>([]);
   const [session, setSession] = useState<ClinicalSession | null>(null);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,12 +24,14 @@ export function ProgressScreen() {
     if (!patient?.id) return;
     setError('');
     try {
-      const [progressData, sessionsData] = await Promise.all([
+      const [progressData, sessionsData, rxData] = await Promise.all([
         getMyProgress(patient.id),
         getClinicalSessions(patient.id, 1),
+        getMyPrescriptions(patient.id),
       ]);
       setPoints(Array.isArray(progressData) ? progressData : []);
       setSession(Array.isArray(sessionsData) && sessionsData.length ? sessionsData[0] : null);
+      setPrescriptions(Array.isArray(rxData) ? rxData : []);
     } catch {
       setError('حدث خطأ — إعادة المحاولة');
     } finally {
@@ -125,6 +128,34 @@ export function ProgressScreen() {
             </View>
           ) : (
             <Text style={styles.muted}>لا توجد جلسات</Text>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>الوصفات الطبية</Text>
+          {prescriptions.filter((r) => r.status === 'active').length === 0 ? (
+            <Text style={styles.muted}>لا توجد وصفات نشطة</Text>
+          ) : (
+            prescriptions
+              .filter((r) => r.status === 'active')
+              .map((rx) => (
+                <View key={rx.id} style={styles.card}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[styles.doctorName, { marginTop: 0 }]}>{rx.rxNumber}</Text>
+                    <View style={{ backgroundColor: C.cyan + '22', paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.badge }}>
+                      <Text style={{ fontSize: 11, color: C.cyan }}>نشطة</Text>
+                    </View>
+                  </View>
+                  {(rx.items ?? []).map((it) => (
+                    <Text key={it.id} style={styles.muted}>
+                      {it.drug?.nameAr ?? '—'} — {it.dose} {it.doseUnit}، {it.frequency}، {it.durationDays} يوم
+                    </Text>
+                  ))}
+                  {rx.expiresAt ? (
+                    <Text style={[styles.muted, { marginTop: 6 }]}>تنتهي: {new Date(rx.expiresAt).toLocaleDateString('ar-SA')}</Text>
+                  ) : null}
+                </View>
+              ))
           )}
         </View>
       </ScrollView>

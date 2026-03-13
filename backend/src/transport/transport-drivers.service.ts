@@ -35,6 +35,13 @@ export class TransportDriversService {
     return driver;
   }
 
+  async findByUserId(userId: string): Promise<TransportDriver | null> {
+    return this.driversRepo.findOne({
+      where: { userId },
+      relations: { vehicle: true, user: true },
+    });
+  }
+
   async setAvailability(id: string, isAvailable: boolean): Promise<TransportDriver> {
     const driver = await this.findOne(id);
     driver.isAvailable = isAvailable;

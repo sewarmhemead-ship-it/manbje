@@ -5,20 +5,23 @@ import {
   Patch,
   Body,
   Param,
+  Query,
   UseGuards,
   ParseUUIDPipe,
   ForbiddenException,
 } from '@nestjs/common';
+import { ClassSerializerInterceptor, UseInterceptors } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User } from './entities/user.entity';
 import { UserRole } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { ClassSerializerInterceptor, UseInterceptors } from '@nestjs/common';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
@@ -27,24 +30,31 @@ export class UsersController {
   constructor(private usersService: UsersService) {}
 
   @Get()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  findAll() {
-    return this.usersService.findAll();
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('users_view')
+  findAll(
+    @Query('role') role?: UserRole,
+    @Query('isActive') isActiveStr?: string,
+    @Query('search') search?: string,
+  ) {
+    const isActive = isActiveStr === 'true' ? true : isActiveStr === 'false' ? false : undefined;
+    return this.usersService.findAll({ role, isActive, search });
   }
 
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN)
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.createWithPassword(
-      dto.email,
-      dto.password,
-      dto.role,
-      dto.nameAr ?? null,
-      dto.nameEn ?? null,
-      dto.phone ?? null,
-    );
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('users_create')
+  async create(@Body() dto: CreateUserDto) {
+    const { user, tempPassword } = await this.usersService.createUser({
+      email: dto.email,
+      password: dto.password,
+      role: dto.role,
+      nameAr: dto.nameAr ?? null,
+      nameEn: dto.nameEn ?? null,
+      phone: dto.phone ?? null,
+      specialty: dto.specialty ?? null,
+    });
+    return { user, tempPassword };
   }
 
   @Patch(':id')
@@ -60,5 +70,36 @@ export class UsersController {
       throw new ForbiddenException('Only admin can change isActive');
     }
     return this.usersService.update(id, dto);
+  }
+
+  @Patch(':id/role')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('users_change_role')
+  updateRole(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { role: UserRole },
+  ) {
+    return this.usersService.updateRole(id, body.role);
+  }
+
+  @Patch(':id/toggle')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('users_edit')
+  toggleActive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.usersService.toggleActive(id, currentUser.id);
+  }
+
+  @Post(':id/reset-password')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('users_edit')
+  async resetPassword(@Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.usersService.findById(id);
+    if (!user) throw new ForbiddenException('User not found');
+    const tempPassword = (user.phone ?? '').replace(/\D/g, '').slice(-4).padStart(4, '0') || '0000';
+    await this.usersService.resetPassword(id, tempPassword);
+    return { tempPassword };
   }
 }

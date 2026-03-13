@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import { apiPost, apiGet, type User } from '@/lib/api';
+import { apiPost, apiGet, type User, type UserRole } from '@/lib/api';
+import { FRONTEND_PERMISSIONS } from '@/lib/permissions';
 
 interface AuthState {
   user: User | null;
@@ -14,6 +15,8 @@ const AuthContext = createContext<{
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  hasPermission: (permission: string) => boolean;
+  isRole: (...roles: UserRole[]) => boolean;
 } | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -85,6 +88,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser();
   }, [refreshUser]);
 
+  const hasPermission = useCallback(
+    (permission: string): boolean => {
+      const role = state.user?.role;
+      if (!role) return false;
+      return FRONTEND_PERMISSIONS[permission]?.includes(role) ?? false;
+    },
+    [state.user?.role]
+  );
+
+  const isRole = useCallback(
+    (...roles: UserRole[]): boolean => {
+      const role = state.user?.role;
+      if (!role) return false;
+      return roles.includes(role);
+    },
+    [state.user?.role]
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -94,6 +115,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         refreshUser,
+        hasPermission,
+        isRole,
       }}
     >
       {children}
