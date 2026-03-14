@@ -71,5 +71,10 @@ export class CreatePatientDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(50)
+  mobilityAid?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }

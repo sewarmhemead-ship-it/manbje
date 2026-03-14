@@ -10,6 +10,7 @@ export const PERMISSIONS: Record<string, Role[]> = {
   appointments_view: [Role.ADMIN, Role.DOCTOR, Role.NURSE, Role.RECEPTIONIST],
   appointments_create: [Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR],
   appointments_edit: [Role.ADMIN, Role.RECEPTIONIST, Role.DOCTOR],
+  appointments_append_note: [Role.ADMIN, Role.NURSE, Role.RECEPTIONIST, Role.DOCTOR],
   appointments_cancel: [Role.ADMIN, Role.RECEPTIONIST],
 
   sessions_view: [Role.ADMIN, Role.DOCTOR, Role.NURSE],
@@ -22,6 +23,7 @@ export const PERMISSIONS: Record<string, Role[]> = {
   transport_view: [Role.ADMIN, Role.NURSE, Role.RECEPTIONIST, Role.DRIVER],
   transport_manage: [Role.ADMIN, Role.RECEPTIONIST],
   transport_driver: [Role.DRIVER],
+  transport_status_update: [Role.ADMIN, Role.NURSE, Role.DRIVER],
 
   billing_view: [Role.ADMIN],
   billing_manage: [Role.ADMIN],
@@ -42,4 +44,8 @@ export const PERMISSIONS: Record<string, Role[]> = {
   users_change_role: [Role.ADMIN],
 
   receptionist_portal: [Role.RECEPTIONIST],
+  doctor_portal: [Role.ADMIN, Role.DOCTOR],
+  nurse_portal: [Role.ADMIN, Role.NURSE],
+  vitals_create: [Role.ADMIN, Role.DOCTOR, Role.NURSE],
+  vitals_view: [Role.ADMIN, Role.DOCTOR, Role.NURSE],
 };

@@ -23,13 +23,13 @@ export const TRANSPORT_STATUS: Record<string, string> = {
 
 export const STATUS_COLORS: Record<string, string> = {
   scheduled: '#22d3ee',
-  in_progress: '#34d399',
+  in_progress: '#fbbf24',
   in_transit: '#fbbf24',
   en_route: '#fbbf24',
-  completed: '#4b5875',
+  completed: '#34d399',
   cancelled: '#f87171',
   no_show: '#f87171',
-  requested: '#f87171',
+  requested: '#4b5875',
   assigned: '#fbbf24',
   arrived_at_center: '#34d399',
 };

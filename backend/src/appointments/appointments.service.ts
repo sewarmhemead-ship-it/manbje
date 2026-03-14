@@ -368,4 +368,35 @@ export class AppointmentsService {
     appointment.notes = (appointment.notes ?? '') + separator + noteToAppend;
     await this.appointmentsRepo.save(appointment);
   }
+
+  async rate(id: string, patientId: string, stars: number, comment?: string | null): Promise<Appointment> {
+    const appointment = await this.findOne(id);
+    if (appointment.patientId !== patientId) {
+      throw new BadRequestException('You can only rate your own appointments');
+    }
+    if (appointment.status !== AppointmentStatus.COMPLETED) {
+      throw new BadRequestException('You can only rate completed appointments');
+    }
+    if (stars < 1 || stars > 5) {
+      throw new BadRequestException('Rating must be between 1 and 5');
+    }
+    appointment.patientRating = stars;
+    appointment.patientComment = comment ?? null;
+    return this.appointmentsRepo.save(appointment);
+  }
+
+  async cancelByPatient(id: string, patientId: string): Promise<Appointment> {
+    const appointment = await this.findOne(id);
+    if (appointment.patientId !== patientId) {
+      throw new BadRequestException('You can only cancel your own appointments');
+    }
+    if (appointment.status !== AppointmentStatus.SCHEDULED) {
+      throw new BadRequestException('Only scheduled appointments can be cancelled');
+    }
+    const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    if (new Date(appointment.startTime) <= twoHoursFromNow) {
+      throw new BadRequestException('Cannot cancel appointment less than 2 hours before start');
+    }
+    return this.updateStatus(id, AppointmentStatus.CANCELLED);
+  }
 }

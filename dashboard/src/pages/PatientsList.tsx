@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Filter, Plus, MoreVertical, UserPlus, X } from 'lucide-react';
+import { Search, Filter, Plus, MoreVertical, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/lib/toast';
 import { apiGet, apiPost } from '@/lib/api';
 import { MOCK_PATIENTS, MOCK_PATIENT_STATS, MOCK_USERS_DOCTORS, isDemoMode } from '@/lib/mock-data';
+import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Avatar } from '@/components/ui/Avatar';
 
 const BG = '#06080e';
 const SURFACE = '#0b0f1a';
@@ -199,30 +202,25 @@ export function PatientsList() {
         </div>
 
         {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Card key={i} className="animate-pulse rounded-2xl border" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-                <CardContent className="p-5">
-                  <div className="h-14 w-14 rounded-full bg-white/10" />
-                  <div className="mt-3 h-5 w-3/4 rounded bg-white/10" />
-                  <div className="mt-2 h-4 w-1/2 rounded bg-white/10" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          view === 'table' ? (
+            <SkeletonTable rows={6} cols={4} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          )
         ) : listData.total === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border py-16" style={{ backgroundColor: SURFACE, borderColor: BORDER }}>
-            <p className="text-gray-400">{search.trim() ? 'لا يوجد مرضى بهذا البحث' : 'لا يوجد مرضى بعد'}</p>
-            {search.trim() ? (
-              <Button variant="outline" size="sm" className="mt-4 border-cyan-500/30 text-cyan-400" onClick={() => { setSearch(''); setSearchInput(''); }}>
-                إعادة تعيين البحث
-              </Button>
-            ) : (
-              <Button size="lg" className="mt-6 bg-cyan-500/20 text-cyan-400" onClick={() => setNewModalOpen(true)}>
-                <UserPlus className="mr-2 h-5 w-5" /> إضافة مريض
-              </Button>
-            )}
-          </div>
+          <EmptyState
+            icon="📭"
+            title={search.trim() ? 'لا يوجد مرضى بهذا البحث' : 'لا مرضى مسجلون'}
+            action={
+              search.trim()
+                ? { label: 'إعادة تعيين البحث', onClick: () => { setSearch(''); setSearchInput(''); } }
+                : { label: 'إضافة مريض', onClick: () => setNewModalOpen(true) }
+            }
+          />
         ) : view === 'cards' ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {sortedData.map((p, i) => (
@@ -335,8 +333,6 @@ function PatientCard({
   onEdit: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const gradient = GRADIENT_CYCLES[styleIndex % 5];
-  const initials = (patient.nameAr ?? '؟').slice(0, 2);
   const age = ageFromBirth(patient.birthDate);
   const score = patient.recoveryScore ?? null;
   const hasRecoveryData = score != null;
@@ -351,16 +347,14 @@ function PatientCard({
 
   return (
     <Card
-      className="cursor-pointer rounded-2xl border transition-all duration-200 hover:border-cyan-500/40 hover:-translate-y-0.5"
+      className="hoverable-card cursor-pointer rounded-2xl border"
       style={{ backgroundColor: SURFACE, borderColor: BORDER, animationDelay: `${styleIndex * 50}ms` }}
       onClick={onOpenProfile}
     >
       <CardContent className="relative p-5" style={{ animation: 'fadeUp 0.3s ease-out both' }}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className={`h-12 w-12 shrink-0 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-lg font-bold text-white`}>
-              {initials}
-            </div>
+            <Avatar name={patient.nameAr ?? '؟'} size={48} />
             <div>
               <p className="font-bold text-white">{patient.nameAr}</p>
               <p className="text-xs text-gray-500" style={{ fontFamily: "'Space Mono', monospace" }}>{idDisplay}</p>

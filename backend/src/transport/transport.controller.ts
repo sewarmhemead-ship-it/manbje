@@ -84,13 +84,27 @@ export class TransportController {
     return this.driversService.create(body);
   }
 
+  @Get('drivers/me')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.DRIVER)
+  async getMyDriverProfile(@CurrentUser() user: User) {
+    const driver = await this.driversService.findByUserId(user.id);
+    if (!driver) throw new ForbiddenException('Driver profile not found');
+    return driver;
+  }
+
   @Patch('drivers/:id/availability')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.DRIVER)
-  setDriverAvailability(
+  async setDriverAvailability(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { isAvailable: boolean },
+    @CurrentUser() user: User,
   ) {
+    if (user.role === UserRole.DRIVER) {
+      const me = await this.driversService.findByUserId(user.id);
+      if (!me || me.id !== id) throw new ForbiddenException('You can only update your own availability');
+    }
     return this.driversService.setAvailability(id, body.isAvailable);
   }
 
@@ -132,7 +146,7 @@ export class TransportController {
 
   @Patch('requests/:id/status')
   @UseGuards(PermissionsGuard)
-  @RequirePermission('transport_driver')
+  @RequirePermission('transport_status_update')
   updateRequestStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTransportStatusDto,

@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '@/lib/api';
 import { STATUS_COLORS, getStatusLabel } from '@/lib/statusLabels';
-import { isDemoMode, MOCK_APPOINTMENTS, MOCK_PATIENTS, MOCK_TRANSPORT_REQUESTS } from '@/lib/mock-data';
 
 const BG = '#06080e';
 const SURFACE = '#0b0f1a';
@@ -12,7 +11,6 @@ const GREEN = '#34d399';
 const AMBER = '#fbbf24';
 const RED = '#f87171';
 const PURPLE = '#a78bfa';
-const DAY_NAMES_AR = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
 
 function toDateStr(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -33,30 +31,31 @@ function getRangeForKey(key: DateRangeKey): { start: string; end: string } {
   return { start: toDateStr(start), end: toDateStr(end) };
 }
 
-interface Appointment {
-  id: string;
-  startTime: string;
-  status: string;
-  doctorId?: string;
-  patientId?: string;
-  doctor?: { id: string; nameAr?: string | null };
-  patient?: { nameAr?: string };
+interface ReportStats {
+  totalAppointments: number;
+  attendanceRate: number;
+  activePatients: number;
+  completedSessions: number;
+  transportTotal: number;
+  transportCompleted: number;
+  transportCancelled: number;
+  avgRecovery: number | null;
+  last7Days: { date: string; dayName: string; completed: number; in_progress: number; cancelled: number; scheduled?: number }[];
+  statusDist: { scheduled: number; completed: number; cancelled: number; in_progress: number };
+  topDoctors: { doctorId: string; doctorName: string; total: number; completed: number; attendanceRate: number }[];
+  mostActivePatients: { id: string; nameAr: string; sessionCount: number; recoveryScore: number | null; lastVisit: string | null }[];
+  transportByDay: { date: string; dayName: string; transportCount: number }[];
 }
-interface Patient {
-  id: string;
-  nameAr: string;
-  recoveryScore?: number | null;
-  createdAt?: string;
-}
-interface TransportRequest {
-  id: string;
-  status: string;
-  mobilityNeed?: string | null;
-  createdAt: string;
-}
+
 interface RecoveryPoint {
   date: string;
-  recoveryScore: number;
+  score: number;
+}
+
+interface RecoveryTrendItem {
+  patientId: string;
+  patientName: string;
+  data: RecoveryPoint[];
 }
 
 export function Reports() {
@@ -66,11 +65,9 @@ export function Reports() {
   const [customTo, setCustomTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [prevAppointments, setPrevAppointments] = useState<Appointment[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [transport, setTransport] = useState<TransportRequest[]>([]);
-  const [recoveryCurves, setRecoveryCurves] = useState<Record<string, RecoveryPoint[]>>({});
+  const [stats, setStats] = useState<ReportStats | null>(null);
+  const [prevStats, setPrevStats] = useState<ReportStats | null>(null);
+  const [recoveryTrends, setRecoveryTrends] = useState<RecoveryTrendItem[]>([]);
 
   const range = dateRangeKey === 'custom' ? { start: customFrom, end: customTo } : getRangeForKey(dateRangeKey);
   const startStr = dateRangeKey === 'custom' ? customFrom : range.start;
@@ -82,68 +79,36 @@ export function Reports() {
     setError(null);
     const start = dateRangeKey === 'custom' ? customFrom : range.start;
     const end = dateRangeKey === 'custom' ? customTo : range.end;
-    const prevStart = new Date(start);
-    const prevEnd = new Date(end);
-    const days = Math.ceil((prevEnd.getTime() - prevStart.getTime()) / 86400000) || 1;
-    prevEnd.setTime(prevStart.getTime() - 86400000);
-    prevStart.setTime(prevEnd.getTime() - (days - 1) * 86400000);
+    const prevEnd = new Date(start);
+    prevEnd.setDate(prevEnd.getDate() - 1);
+    const days = Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / 86400000) || 1;
+    const prevStart = new Date(prevEnd);
+    prevStart.setDate(prevStart.getDate() - (days - 1));
     const prevStartStr = toDateStr(prevStart);
     const prevEndStr = toDateStr(prevEnd);
 
     try {
-      if (isDemoMode()) {
-        const apts = (MOCK_APPOINTMENTS as unknown as Appointment[]).filter(
-          (a) => a.startTime >= start && a.startTime <= end + 'T23:59:59.999Z'
-        );
-        const tr = (MOCK_TRANSPORT_REQUESTS as unknown as TransportRequest[]).filter(
-          (r) => (r.createdAt ?? '').slice(0, 10) >= start && (r.createdAt ?? '').slice(0, 10) <= end
-        );
-        setAppointments(apts);
-        setPrevAppointments([]);
-        setPatients(MOCK_PATIENTS as unknown as Patient[]);
-        setTransport(tr);
-        setRecoveryCurves({});
-        setLoading(false);
-        return;
-      }
-      const [aptsRes, prevAptsRes, patientsRes, transportRes] = await Promise.all([
-        apiGet<Appointment[]>(`/appointments?startDate=${start}&endDate=${end}`).catch(() => []),
-        apiGet<Appointment[]>(`/appointments?startDate=${prevStartStr}&endDate=${prevEndStr}`).catch(() => []),
-        apiGet<Patient[]>('/patients').catch(() => []),
-        apiGet<TransportRequest[]>('/transport/requests').catch(() => []),
+      const [currentRes, prevRes] = await Promise.all([
+        apiGet<ReportStats>(`/reports/stats?startDate=${start}&endDate=${end}`),
+        apiGet<ReportStats>(`/reports/stats?startDate=${prevStartStr}&endDate=${prevEndStr}`).catch(() => null),
       ]);
-      const apts = Array.isArray(aptsRes) ? aptsRes : [];
-      const inRange = (d: string) => d >= start && d <= end + 'T23:59:59.999Z';
-      const trFiltered = (Array.isArray(transportRes) ? transportRes : []).filter(
-        (r) => inRange((r as TransportRequest).createdAt ?? '')
-      );
-      setAppointments(apts);
-      setPrevAppointments(Array.isArray(prevAptsRes) ? prevAptsRes : []);
-      setPatients(Array.isArray(patientsRes) ? patientsRes : []);
-      setTransport(trFiltered);
+      setStats(currentRes);
+      setPrevStats(prevRes);
 
-      const byPatient = new Map<string, number>();
-      apts.forEach((a) => {
-        if (a.patientId) byPatient.set(a.patientId, (byPatient.get(a.patientId) ?? 0) + 1);
-      });
-      const top3PatientIds = [...byPatient.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([id]) => id);
-      const progressMap: Record<string, RecoveryPoint[]> = {};
-      await Promise.all(
-        top3PatientIds.map(async (id) => {
-          try {
-            const data = await apiGet<RecoveryPoint[]>(`/patients/${id}/progress`);
-            progressMap[id] = Array.isArray(data) ? data : [];
-          } catch {
-            progressMap[id] = [];
-          }
-        })
-      );
-      setRecoveryCurves(progressMap);
+      const top3Ids = (currentRes.mostActivePatients ?? []).slice(0, 3).map((p) => p.id).filter(Boolean);
+      if (top3Ids.length > 0) {
+        const trends = await apiGet<RecoveryTrendItem[]>(
+          `/reports/recovery-trends?patientIds=${top3Ids.join(',')}`
+        ).catch(() => []);
+        setRecoveryTrends(Array.isArray(trends) ? trends : []);
+      } else {
+        setRecoveryTrends([]);
+      }
     } catch {
       setError('تعذر التحميل');
+      setStats(null);
+      setPrevStats(null);
+      setRecoveryTrends([]);
     } finally {
       setLoading(false);
     }
@@ -157,104 +122,74 @@ export function Reports() {
 
   useEffect(() => {
     fetchData();
-  }, [dateRangeKey, range.start, range.end, fetchData]);
+  }, [fetchData]);
 
   const handleExportPdf = () => {
     window.print();
   };
 
-  const totalApts = appointments.length;
-  const prevTotalApts = prevAppointments.length;
+  const handleExportCsv = () => {
+    if (!stats) return;
+    const headers = ['التاريخ', 'المواعيد', 'المكتملة', 'الملغاة', 'النقل'];
+    const rows = stats.last7Days.map((d) => [
+      d.date,
+      (d.completed ?? 0) + (d.in_progress ?? 0) + (d.cancelled ?? 0) + (d.scheduled ?? 0),
+      d.completed ?? 0,
+      d.cancelled ?? 0,
+      (stats.transportByDay ?? []).find((t) => t.date === d.date)?.transportCount ?? 0,
+    ]);
+    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `تقارير-${startStr}-${endStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const totalApts = stats?.totalAppointments ?? 0;
+  const prevTotalApts = prevStats?.totalAppointments ?? 0;
   const trendPct = prevTotalApts ? Math.round(((totalApts - prevTotalApts) / prevTotalApts) * 100) : 0;
-  const completedCount = appointments.filter((a) => a.status === 'completed').length;
-  const attendancePct = totalApts ? Math.round((completedCount / totalApts) * 100) : 0;
-  const patientIdsWithSession = new Set(appointments.map((a) => a.patientId).filter(Boolean));
-  const activePatients = patientIdsWithSession.size;
-  const transportCompleted = transport.filter((t) => t.status === 'completed' || t.status === 'arrived_at_center').length;
-  const transportCancelled = transport.filter((t) => t.status === 'cancelled').length;
-  const wheelchairCount = transport.filter((t) => t.mobilityNeed === 'wheelchair').length;
-  const avgRecovery = (() => {
-    const withScore = patients.filter((p) => p.recoveryScore != null);
-    if (!withScore.length) return null;
-    const sum = withScore.reduce((a, p) => a + (p.recoveryScore ?? 0), 0);
-    return Math.round(sum / withScore.length);
-  })();
+  const attendancePct = stats?.attendanceRate ?? 0;
+  const activePatients = stats?.activePatients ?? 0;
+  const completedCount = stats?.completedSessions ?? 0;
+  const transportCompleted = stats?.transportCompleted ?? 0;
+  const transportCancelled = stats?.transportCancelled ?? 0;
+  const transportTotal = stats?.transportTotal ?? 0;
+  const wheelchairCount = 0;
+  const avgRecovery = stats?.avgRecovery ?? null;
   const recoveryColor = avgRecovery == null ? '#4b5875' : avgRecovery > 70 ? GREEN : avgRecovery >= 40 ? AMBER : RED;
 
-  const last7Days = (() => {
-    const out: { date: string; dayName: string; completed: number; in_progress: number; cancelled: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = toDateStr(d);
-      const dayAppointments = appointments.filter((a) => a.startTime.startsWith(dateStr));
-      out.push({
-        date: dateStr,
-        dayName: DAY_NAMES_AR[d.getDay()],
-        completed: dayAppointments.filter((a) => a.status === 'completed').length,
-        in_progress: dayAppointments.filter((a) => a.status === 'in_progress').length,
-        cancelled: dayAppointments.filter((a) => a.status === 'cancelled').length,
-      });
-    }
-    return out;
-  })();
-
-  const statusDistribution = (() => {
-    const s: Record<string, number> = { scheduled: 0, completed: 0, cancelled: 0, in_transit: 0, in_progress: 0 };
-    appointments.forEach((a) => {
-      const st = a.status === 'in_progress' ? 'in_progress' : a.status;
-      s[st] = (s[st] ?? 0) + 1;
-    });
-    return Object.entries(s).filter(([, n]) => n > 0);
-  })();
-
-  const doctorStats = (() => {
-    const byDoctor: Record<string, { name: string; sessions: number; completed: number }> = {};
-    appointments.forEach((a) => {
-      const id = a.doctorId ?? 'unknown';
-      if (!byDoctor[id]) {
-        byDoctor[id] = { name: a.doctor?.nameAr ?? '—', sessions: 0, completed: 0 };
-      }
-      byDoctor[id].sessions += 1;
-      if (a.status === 'completed') byDoctor[id].completed += 1;
-    });
-    return Object.entries(byDoctor)
-      .map(([id, d]) => ({ id, ...d, attendance: d.sessions ? Math.round((d.completed / d.sessions) * 100) : 0 }))
-      .sort((a, b) => b.sessions - a.sessions)
-      .slice(0, 5);
-  })();
-
-  const patientSessionCount = new Map<string, number>();
-  const patientLastVisit = new Map<string, string>();
-  appointments.forEach((a) => {
-    if (a.patientId) {
-      patientSessionCount.set(a.patientId, (patientSessionCount.get(a.patientId) ?? 0) + 1);
-      const d = (a.startTime ?? '').slice(0, 10);
-      const prev = patientLastVisit.get(a.patientId);
-      if (!prev || d > prev) patientLastVisit.set(a.patientId, d);
-    }
-  });
-  const topPatients = patients
-    .map((p) => ({
-      ...p,
-      sessionCount: patientSessionCount.get(p.id) ?? 0,
-      lastVisit: patientLastVisit.get(p.id) ?? null,
-    }))
-    .sort((a, b) => b.sessionCount - a.sessionCount)
-    .slice(0, 5);
-
-  const transportByDay = (() => {
-    const byDay: { date: string; dayName: string; count: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = toDateStr(d);
-      const count = transport.filter((r) => (r.createdAt ?? '').startsWith(dateStr)).length;
-      byDay.push({ date: dateStr, dayName: DAY_NAMES_AR[d.getDay()], count });
-    }
-    return byDay;
-  })();
+  const last7Days = stats?.last7Days ?? [];
+  const statusDistribution = stats?.statusDist
+    ? Object.entries(stats.statusDist).filter(([, n]) => n > 0)
+    : [];
+  const doctorStats = (stats?.topDoctors ?? []).map((d) => ({
+    id: d.doctorId,
+    name: d.doctorName,
+    sessions: d.total,
+    completed: d.completed,
+    attendance: d.attendanceRate,
+  }));
+  const topPatients = stats?.mostActivePatients ?? [];
+  const transportByDay = (stats?.transportByDay ?? []).map((d) => ({
+    date: d.date,
+    dayName: d.dayName,
+    count: d.transportCount,
+  }));
   const maxTransportCount = Math.max(1, ...transportByDay.map((d) => d.count));
+
+  const recoveryCurves: Record<string, { date: string; recoveryScore: number }[]> = {};
+  recoveryTrends
+    .filter((r) => (r.data?.length ?? 0) >= 2)
+    .forEach((r) => {
+      recoveryCurves[r.patientId] = (r.data ?? []).map((p) => ({ date: p.date, recoveryScore: p.score }));
+    });
+  const recoveryPatientNames: { id: string; nameAr: string }[] = recoveryTrends.map((r) => ({
+    id: r.patientId,
+    nameAr: r.patientName,
+  }));
 
   if (error) {
     return (
@@ -323,6 +258,14 @@ export function Reports() {
             </button>
             <button
               type="button"
+              onClick={handleExportCsv}
+              disabled={!stats}
+              className="rounded-xl border border-[rgba(255,255,255,0.1)] bg-transparent px-4 py-2 text-sm text-[#dde6f5] hover:bg-white/5 disabled:opacity-50"
+            >
+              تصدير CSV
+            </button>
+            <button
+              type="button"
               onClick={handleExportPdf}
               className="rounded-xl border border-[rgba(255,255,255,0.1)] bg-transparent px-4 py-2 text-sm text-[#dde6f5] hover:bg-white/5"
             >
@@ -336,6 +279,14 @@ export function Reports() {
       </header>
 
       <main className="p-6 print:p-0">
+        {error && (
+          <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4" style={{ borderColor: 'rgba(251,191,36,0.3)' }}>
+            <p className="text-amber-200">{error}</p>
+            <button type="button" onClick={() => fetchData()} className="mt-2 rounded-lg bg-amber-500/20 px-3 py-1.5 text-sm text-amber-200 hover:bg-amber-500/30">
+              إعادة المحاولة
+            </button>
+          </div>
+        )}
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -345,7 +296,12 @@ export function Reports() {
               </div>
             ))}
           </div>
-        ) : (
+        ) : !error && stats && totalApts === 0 ? (
+          <div className="rounded-2xl border p-8 text-center" style={{ background: SURFACE, borderColor: BORDER }}>
+            <p className="text-[#dde6f5]">لا توجد بيانات للفترة المحددة</p>
+            <p className="mt-2 text-sm text-[#4b5875]">جرب تغيير نطاق التاريخ</p>
+          </div>
+        ) : !error && stats ? (
           <>
             {/* Section 1 — KPI Cards */}
             <section className="report-section mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-6 print:break-after-page" style={{ animation: 'fadeUp 0.3s ease-out both' }}>
@@ -382,7 +338,7 @@ export function Reports() {
               <KPICard
                 styleIndex={4}
                 label="طلبات النقل"
-                value={transport.length}
+                value={transportTotal}
                 subStat={`${transportCompleted} مكتمل / ${transportCancelled} ملغى`}
                 accent={AMBER}
                 icon="🚐"
@@ -390,7 +346,7 @@ export function Reports() {
               <KPICard
                 styleIndex={5}
                 label="متوسط التعافي"
-                value={avgRecovery != null ? `${avgRecovery}%` : '—'}
+                value={avgRecovery != null ? `${avgRecovery}%` : 'لا بيانات'}
                 accent={recoveryColor}
                 icon="📈"
                 progress={avgRecovery != null ? avgRecovery : undefined}
@@ -509,7 +465,7 @@ export function Reports() {
                 <div>
                   <p className="text-[11px] text-[#4b5875]">معدل إكمال الرحلات</p>
                   <p className="text-2xl font-bold text-[#dde6f5]" style={{ fontFamily: "'Space Mono', monospace" }}>
-                    {transport.length ? Math.round((transportCompleted / transport.length) * 100) : 0}%
+                    {transportTotal ? Math.round((transportCompleted / transportTotal) * 100) : 0}%
                   </p>
                 </div>
                 <div>
@@ -527,10 +483,10 @@ export function Reports() {
             {/* Section 5 — Recovery Trends */}
             <section className="report-section rounded-2xl border p-6 print:break-after-page" style={{ background: SURFACE, borderColor: BORDER, animation: 'fadeUp 0.3s ease-out both', animationDelay: '200ms' }}>
               <h3 className="mb-4 text-base font-medium text-[#dde6f5]">📈 منحنى التعافي العام</h3>
-              <RecoveryLineChartSVG curves={recoveryCurves} patients={patients} />
+              <RecoveryLineChartSVG curves={recoveryCurves} patients={recoveryPatientNames} />
             </section>
           </>
-        )}
+        ) : null}
       </main>
     </div>
   );
@@ -702,14 +658,24 @@ function TransportBarChartSVG({ data, maxCount }: { data: { date?: string; dayNa
   );
 }
 
-function RecoveryLineChartSVG({ curves, patients }: { curves: Record<string, RecoveryPoint[]>; patients: Patient[] }) {
-  const patientIds = Object.keys(curves).filter((id) => (curves[id]?.length ?? 0) > 0);
+type RecoveryChartPoint = { date: string; score?: number; recoveryScore?: number };
+
+function RecoveryLineChartSVG({
+  curves,
+  patients,
+}: {
+  curves: Record<string, RecoveryChartPoint[]>;
+  patients: { id: string; nameAr?: string }[];
+}) {
+  const patientIds = Object.keys(curves).filter((id) => (curves[id]?.length ?? 0) >= 2);
   const colors = [CYAN, GREEN, PURPLE];
   const w = 600;
   const h = 220;
   const pad = { left: 50, right: 80, top: 20, bottom: 30 };
   const chartW = w - pad.left - pad.right;
   const chartH = h - pad.top - pad.bottom;
+
+  const getScore = (p: RecoveryChartPoint) => p.recoveryScore ?? p.score ?? 0;
 
   const allDates = Array.from(
     new Set(patientIds.flatMap((id) => (curves[id] ?? []).map((p) => p.date))).values()
@@ -725,7 +691,7 @@ function RecoveryLineChartSVG({ curves, patients }: { curves: Record<string, Rec
   const getY = (score: number) => pad.top + chartH - (score / 100) * chartH;
 
   if (patientIds.length === 0) {
-    return <p className="py-8 text-center text-[#4b5875]">لا توجد بيانات تعافي للفترة المحددة</p>;
+    return <p className="py-8 text-center text-[#4b5875]">لا توجد جلسات مسجلة بعد</p>;
   }
 
   return (
@@ -741,7 +707,7 @@ function RecoveryLineChartSVG({ curves, patients }: { curves: Record<string, Rec
       {patientIds.map((id, idx) => {
         const points = (curves[id] ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
         const color = colors[idx % colors.length];
-        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(p.date)} ${getY(p.recoveryScore)}`).join(' ');
+        const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(p.date)} ${getY(getScore(p))}`).join(' ');
         const firstX = points[0] ? getX(points[0].date) : pad.left;
         const lastX = points[points.length - 1] ? getX(points[points.length - 1].date) : pad.left;
         const bottomY = h - pad.bottom;
@@ -752,7 +718,7 @@ function RecoveryLineChartSVG({ curves, patients }: { curves: Record<string, Rec
             <path d={areaD} fill={color} fillOpacity="0.08" />
             <path d={pathD} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             {points.map((p) => (
-              <circle key={p.date} cx={getX(p.date)} cy={getY(p.recoveryScore)} r="3" fill={color} />
+              <circle key={p.date} cx={getX(p.date)} cy={getY(getScore(p))} r="3" fill={color} />
             ))}
             <text x={w - pad.right + 8} y={pad.top + 20 + idx * 18} fill={color} fontSize="10" fontFamily="Cairo">
               {name}

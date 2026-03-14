@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Plus, Loader2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiGet, apiPost, apiPatch } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { MOCK_APPOINTMENTS, MOCK_USERS_DOCTORS, isDemoMode } from '@/lib/mock-data';
-import { getStatusLabel, getStatusBadgeStyle } from '@/lib/statusLabels';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import type { Appointment, User as ApiUser } from '@/lib/api';
 
 const ACCENT = '#22d3ee';
@@ -282,8 +284,8 @@ export function AppointmentsCalendar() {
           {viewMode === 'week' && (
             <>
               {loading ? (
-                <div className="flex h-64 items-center justify-center">
-                  <Loader2 className="h-10 w-10 animate-spin text-cyan-400" />
+                <div className="min-h-[320px]">
+                  <SkeletonTable rows={8} cols={5} />
                 </div>
               ) : (
                 <WeekView
@@ -648,35 +650,34 @@ function DetailPanel({
   onClose: () => void;
   onRefresh: () => void;
   onNavigateToPatient: (id: string) => void;
-  toast: (m: string) => void;
+  toast: ReturnType<typeof useToast>;
 }) {
   const [updating, setUpdating] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const tr = appointment.transportRequest;
-  const statusBadgeStyle = getStatusBadgeStyle(appointment.status);
 
   const startSession = async () => {
     setUpdating(true);
     try {
       await apiPatch('/appointments/' + appointment.id + '/status', { status: 'in_progress' });
-      toast('تم بدء الجلسة');
+      toast.success?.('تم بدء الجلسة') ?? toast('تم بدء الجلسة');
       onRefresh();
     } catch {
-      toast('فشل التحديث');
+      toast.error?.('فشل التحديث') ?? toast('فشل التحديث');
     } finally {
       setUpdating(false);
     }
   };
 
   const cancelAppointment = async () => {
-    if (!confirm('هل تريد إلغاء الموعد؟')) return;
     setUpdating(true);
     try {
       await apiPatch('/appointments/' + appointment.id + '/status', { status: 'cancelled' });
-      toast('تم إلغاء الموعد');
+      toast.success?.('تم إلغاء الموعد') ?? toast('تم إلغاء الموعد');
       onRefresh();
       onClose();
     } catch {
-      toast('فشل الإلغاء');
+      toast.error?.('فشل الإلغاء') ?? toast('فشل الإلغاء');
     } finally {
       setUpdating(false);
     }
@@ -697,9 +698,7 @@ function DetailPanel({
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div>
             <p className="text-xl font-medium text-white">{appointment.patient?.nameAr ?? appointment.patientId}</p>
-            <span className="mt-1 inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" style={statusBadgeStyle}>
-              {getStatusLabel(appointment.status, 'appointment')}
-            </span>
+            <StatusBadge status={appointment.status} type="appointment" className="mt-1" />
           </div>
           <div className="text-sm text-gray-400">
             <p>الوقت: {new Date(appointment.startTime).toLocaleTimeString('ar-SA')} – {new Date(appointment.endTime).toLocaleTimeString('ar-SA')}</p>
@@ -738,12 +737,21 @@ function DetailPanel({
             <Button variant="outline" className="w-full border-cyan-500/30" onClick={() => toast('تعديل الموعد — قريباً')}>
               تعديل الموعد
             </Button>
-            <Button variant="outline" className="w-full border-red-500/30 text-red-400" disabled={updating || appointment.status === 'cancelled'} onClick={cancelAppointment}>
+            <Button variant="outline" className="w-full border-red-500/30 text-red-400" disabled={updating || appointment.status === 'cancelled'} onClick={() => setCancelConfirmOpen(true)}>
               إلغاء الموعد
             </Button>
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={cancelConfirmOpen}
+        title="إلغاء الموعد"
+        message="هل تريد إلغاء الموعد؟ سيتم إبلاغ المريض."
+        confirmLabel="إلغاء الموعد"
+        confirmVariant="danger"
+        onConfirm={cancelAppointment}
+        onCancel={() => setCancelConfirmOpen(false)}
+      />
     </div>
   );
 }

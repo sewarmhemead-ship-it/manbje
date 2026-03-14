@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiGet, apiPost, apiPatch } from '@/lib/api';
 import { useToast } from '@/lib/toast';
+import { SkeletonCard } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const BG = '#06080e';
 const SURFACE = '#0b0f1a';
@@ -233,9 +235,13 @@ export function Notifications() {
             </div>
             <div className="max-h-[420px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
               {loading ? (
-                <div className="flex items-center justify-center p-8 text-[#4b5875]">جاري التحميل...</div>
+                <div className="p-4 space-y-2">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <SkeletonCard key={i} />
+                  ))}
+                </div>
               ) : list.length === 0 ? (
-                <div className="p-8 text-center text-[#4b5875]">لا توجد إشعارات</div>
+                <EmptyState icon="🔔" title="لا إشعارات جديدة" />
               ) : (
                 list.map((n) => (
                   <div

@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiGet, apiPost, apiPatch } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Plus, Eye, Printer, X, Loader2 } from 'lucide-react';
+import { SkeletonCard } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const BG = '#06080e';
 const SURFACE = '#0b0f1a';
@@ -140,6 +144,8 @@ interface NewRxItem {
 
 export function Prescriptions() {
   const toast = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -154,6 +160,17 @@ export function Prescriptions() {
   const [newRxOpen, setNewRxOpen] = useState(false);
   const [detailRx, setDetailRx] = useState<Prescription | null>(null);
   const [addDrugOpen, setAddDrugOpen] = useState(false);
+  const [initialPatientForNewRx, setInitialPatientForNewRx] = useState<{ id: string; nameAr: string } | null>(null);
+  const [cancelConfirmRx, setCancelConfirmRx] = useState<Prescription | null>(null);
+
+  useEffect(() => {
+    const state = location.state as { openRx?: boolean; patientId?: string; patientName?: string } | null;
+    if (state?.openRx) {
+      setNewRxOpen(true);
+      if (state.patientId) setInitialPatientForNewRx({ id: state.patientId, nameAr: state.patientName ?? '' });
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const fetchStats = useCallback(() => {
     apiGet<RxStats>('/prescriptions/stats').then(setStats).catch(() => setStats(null));
@@ -196,15 +213,20 @@ export function Prescriptions() {
   }, [drugSearch, drugCategoryFilter, loading, fetchDrugs]);
 
   const handleCancelRx = (rx: Prescription) => {
-    if (!window.confirm('إلغاء الوصفة؟')) return;
+    setCancelConfirmRx(rx);
+  };
+  const confirmCancelRx = () => {
+    const rx = cancelConfirmRx;
+    if (!rx) return;
     apiPatch(`/prescriptions/${rx.id}/status`, { status: 'cancelled' })
       .then(() => {
-        toast('✓ تم إلغاء الوصفة');
+        (toast as { success?: (a: string) => void }).success?.('تم إلغاء الوصفة') ?? toast('✓ تم إلغاء الوصفة');
         fetchPrescriptions();
         fetchStats();
         if (detailRx?.id === rx.id) setDetailRx(null);
       })
-      .catch(() => toast('فشل الإلغاء'));
+      .catch(() => (toast as { error?: (a: string) => void }).error?.('فشل الإلغاء') ?? toast('فشل الإلغاء'));
+    setCancelConfirmRx(null);
   };
 
   const handlePrint = () => {
@@ -291,11 +313,13 @@ export function Prescriptions() {
             </div>
             <div className="max-h-[480px] overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
               {loading ? (
-                <div className="flex items-center justify-center p-8 text-[#4b5875]">
-                  <Loader2 className="h-8 w-8 animate-spin" />
+                <div className="p-4 space-y-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <SkeletonCard key={i} />
+                  ))}
                 </div>
               ) : filteredPrescriptions.length === 0 ? (
-                <div className="p-8 text-center text-[#4b5875]">لا توجد وصفات</div>
+                <EmptyState icon="💊" title="لا وصفات نشطة" />
               ) : (
                 filteredPrescriptions.map((rx) => (
                   <div
@@ -444,14 +468,17 @@ export function Prescriptions() {
       {/* New Rx Modal */}
       {newRxOpen && (
         <NewRxModal
-          onClose={() => setNewRxOpen(false)}
+          onClose={() => { setNewRxOpen(false); setInitialPatientForNewRx(null); }}
           onSuccess={() => {
             setNewRxOpen(false);
+            setInitialPatientForNewRx(null);
             fetchPrescriptions();
             fetchStats();
             fetchDrugs();
           }}
           toast={toast}
+          initialPatientId={initialPatientForNewRx?.id}
+          initialPatientName={initialPatientForNewRx?.nameAr}
         />
       )}
 
@@ -463,6 +490,16 @@ export function Prescriptions() {
           onPrint={handlePrint}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={!!cancelConfirmRx}
+        title="إلغاء الوصفة"
+        message="هل تريد إلغاء هذه الوصفة؟"
+        confirmLabel="إلغاء الوصفة"
+        confirmVariant="danger"
+        onConfirm={confirmCancelRx}
+        onCancel={() => setCancelConfirmRx(null)}
+      />
 
       {/* Add Drug Modal (Admin) */}
       {addDrugOpen && isAdmin && (
@@ -483,16 +520,24 @@ function NewRxModal({
   onClose,
   onSuccess,
   toast,
+  initialPatientId,
+  initialPatientName,
 }: {
   onClose: () => void;
   onSuccess: () => void;
   toast: (m: string) => void;
+  initialPatientId?: string;
+  initialPatientName?: string;
 }) {
   const { user } = useAuth();
   const [patientSearch, setPatientSearch] = useState('');
   const [patientOptions, setPatientOptions] = useState<PatientOption[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState('');
-  const [selectedPatientName, setSelectedPatientName] = useState('');
+  const [selectedPatientId, setSelectedPatientId] = useState(initialPatientId ?? '');
+  const [selectedPatientName, setSelectedPatientName] = useState(initialPatientName ?? '');
+  useEffect(() => {
+    if (initialPatientId) setSelectedPatientId(initialPatientId);
+    if (initialPatientName != null) setSelectedPatientName(initialPatientName);
+  }, [initialPatientId, initialPatientName]);
   const [appointmentId, setAppointmentId] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [instructions, setInstructions] = useState('');

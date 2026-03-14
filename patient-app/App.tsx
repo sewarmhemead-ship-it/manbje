@@ -52,6 +52,12 @@ function AppContent() {
           border: 'rgba(255,255,255,0.06)',
           notification: '#f87171',
         },
+        fonts: {
+          regular: { fontFamily: 'Cairo', fontWeight: '400' as const },
+          medium: { fontFamily: 'Cairo', fontWeight: '500' as const },
+          bold: { fontFamily: 'Cairo', fontWeight: '700' as const },
+          heavy: { fontFamily: 'Cairo', fontWeight: '700' as const },
+        },
       }}
     >
       <MainTabs />

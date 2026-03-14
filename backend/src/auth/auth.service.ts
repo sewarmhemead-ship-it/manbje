@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -58,5 +58,14 @@ export class AuthService {
 
   async validateUser(id: string): Promise<User | null> {
     return this.usersService.findById(id);
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new UnauthorizedException('User not found');
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) throw new UnauthorizedException('كلمة المرور الحالية غير صحيحة');
+    if (newPassword.length < 6) throw new BadRequestException('كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل');
+    await this.usersService.resetPassword(userId, newPassword);
   }
 }

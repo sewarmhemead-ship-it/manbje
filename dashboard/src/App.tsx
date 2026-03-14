@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ToastProvider } from '@/lib/toast';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { UnauthorizedCardByRole } from '@/components/UnauthorizedCard';
 import { Dashboard } from '@/pages/Dashboard';
 import { Login } from '@/pages/Login';
 import { Placeholder } from '@/pages/Placeholder';
@@ -18,6 +19,8 @@ import { Settings } from '@/pages/Settings';
 import { Users } from '@/pages/Users';
 import { DriverPortal } from '@/pages/DriverPortal';
 import { ReceptionistPortal } from '@/pages/ReceptionistPortal';
+import { DoctorPortal } from '@/pages/DoctorPortal';
+import { NursePortal } from '@/pages/NursePortal';
 
 function AuthGate({ children, allowDriver }: { children: React.ReactNode; allowDriver?: boolean }) {
   const { token, user, ready } = useAuth();
@@ -46,13 +49,15 @@ function AppRoutesInner() {
         <Route path="patients/:id" element={<ProtectedRoute permission="patients_view"><Patient360 /></ProtectedRoute>} />
         <Route path="transport" element={<ProtectedRoute permission="transport_view"><Transport /></ProtectedRoute>} />
         <Route path="equipment" element={<ProtectedRoute permission="patients_view"><Equipment /></ProtectedRoute>} />
-        <Route path="reports" element={<ProtectedRoute permission="reports_view"><Reports /></ProtectedRoute>} />
+        <Route path="reports" element={<ProtectedRoute permission="reports_view" fallback={<UnauthorizedCardByRole />}><Reports /></ProtectedRoute>} />
         <Route path="notifications" element={<ProtectedRoute permission="notifications_view"><Notifications /></ProtectedRoute>} />
-        <Route path="prescriptions" element={<ProtectedRoute permission="prescriptions_view"><Prescriptions /></ProtectedRoute>} />
-        <Route path="billing" element={<ProtectedRoute permission="billing_view"><Placeholder /></ProtectedRoute>} />
-        <Route path="users" element={<ProtectedRoute permission="users_view"><Users /></ProtectedRoute>} />
+        <Route path="prescriptions" element={<ProtectedRoute permission="prescriptions_view" fallback={<UnauthorizedCardByRole />}><Prescriptions /></ProtectedRoute>} />
+        <Route path="billing" element={<ProtectedRoute permission="billing_view" fallback={<UnauthorizedCardByRole />}><Placeholder /></ProtectedRoute>} />
+        <Route path="users" element={<ProtectedRoute permission="users_view" fallback={<UnauthorizedCardByRole />}><Users /></ProtectedRoute>} />
         <Route path="settings" element={<ProtectedRoute permission="settings_view"><Settings /></ProtectedRoute>} />
         <Route path="receptionist" element={<ProtectedRoute permission="receptionist_portal"><ReceptionistPortal /></ProtectedRoute>} />
+        <Route path="doctor-portal" element={<ProtectedRoute permission="doctor_portal"><DoctorPortal /></ProtectedRoute>} />
+        <Route path="nurse-portal" element={<ProtectedRoute permission="nurse_portal"><NursePortal /></ProtectedRoute>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

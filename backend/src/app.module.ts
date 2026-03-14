@@ -18,6 +18,7 @@ import { ReportsModule } from './reports/reports.module';
 import { BillingModule } from './billing/billing.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
+import { VitalsModule } from './vitals/vitals.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 @Module({
@@ -26,15 +27,21 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
     ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      url: process.env.DATABASE_URL, // تأكد أنه يقرأ من هنا
+      ...(process.env.DATABASE_URL
+        ? {
+            url: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false },
+          }
+        : {
+            host: process.env.DB_HOST ?? 'localhost',
+            port: parseInt(process.env.DB_PORT ?? '5432', 10),
+            username: process.env.DB_USER ?? 'postgres',
+            password: process.env.DB_PASSWORD ?? 'postgres',
+            database: process.env.DB_NAME ?? 'physiocore',
+            ssl: false,
+          }),
       autoLoadEntities: true,
-      synchronize: true, // فقط للتطوير
-      ssl: true,
-      extra: {
-        ssl: {
-          rejectUnauthorized: false,
-        },
-      },
+      synchronize: true, // للتطوير فقط
     }),
     AuthModule,
     UsersModule,
@@ -51,6 +58,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
     BillingModule,
     NotificationsModule,
     PrescriptionsModule,
+    VitalsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

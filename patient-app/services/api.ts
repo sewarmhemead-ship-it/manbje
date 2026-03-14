@@ -38,6 +38,10 @@ export interface Patient {
   nameEn?: string | null;
   phone: string;
   recoveryScore?: number | null;
+  address?: string | null;
+  diagnosis?: string | null;
+  createdAt?: string;
+  arrivalPreference?: string;
 }
 
 export interface Appointment {
@@ -46,6 +50,8 @@ export interface Appointment {
   endTime: string;
   status: string;
   arrivalType: string;
+  patientRating?: number | null;
+  patientComment?: string | null;
   doctor?: { nameAr?: string | null };
   room?: { roomNumber?: string };
   transportRequest?: {
@@ -77,6 +83,7 @@ export interface OutboundNotification {
   status: string;
   createdAt: string;
   sentAt?: string | null;
+  appointmentId?: string | null;
 }
 
 export interface ClinicalSession {
@@ -106,6 +113,7 @@ export interface Prescription {
   status: string;
   expiresAt?: string | null;
   createdAt: string;
+  doctor?: { nameAr?: string | null };
   items?: PrescriptionItem[];
 }
 
@@ -136,7 +144,7 @@ export async function getMyProgress(patientId: string): Promise<ProgressPoint[]>
   return Array.isArray(data) ? data : [];
 }
 
-export async function getMyNotifications(patientId: string, limit = 1): Promise<OutboundNotification[]> {
+export async function getMyNotifications(limit = 50): Promise<OutboundNotification[]> {
   const { data } = await api.get<OutboundNotification[]>(`/notifications/me?limit=${limit}`);
   return Array.isArray(data) ? data : [];
 }
@@ -158,4 +166,21 @@ export async function getAuthMe(): Promise<{ id: string; role: string; email?: s
 export async function getClinicalSessions(patientId: string, limit = 1): Promise<ClinicalSession[]> {
   const { data } = await api.get<ClinicalSession[]>(`/clinical-sessions?patientId=${patientId}&limit=${limit}`);
   return Array.isArray(data) ? data : [];
+}
+
+export async function getMyVitals(limit = 10): Promise<{ painLevel?: number | null; recordedAt: string }[]> {
+  const { data } = await api.get(`/vitals/me?limit=${limit}`);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function rateAppointment(appointmentId: string, stars: number, comment?: string): Promise<unknown> {
+  return api.patch(`/appointments/${appointmentId}/rating`, { stars, comment });
+}
+
+export async function cancelAppointment(appointmentId: string): Promise<unknown> {
+  return api.patch(`/appointments/${appointmentId}/cancel`);
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<unknown> {
+  return api.patch('/auth/change-password', { currentPassword, newPassword });
 }

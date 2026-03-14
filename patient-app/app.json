@@ -23,6 +23,9 @@
     },
     "extra": {
       "supportsRTL": true
-    }
+    },
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }

@@ -76,6 +76,12 @@ export class Appointment {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
+  @Column({ name: 'patient_rating', type: 'int', nullable: true })
+  patientRating: number | null;
+
+  @Column({ name: 'patient_comment', type: 'text', nullable: true })
+  patientComment: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

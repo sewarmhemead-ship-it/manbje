@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,9 @@ import {
   RefreshControl,
   ScrollView,
   TouchableOpacity,
-  Linking,
+  TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { C, radius, fontMono } from '../constants/theme';
@@ -15,10 +16,13 @@ import {
   getMyAppointments,
   getMyExercises,
   getMyNotifications,
+  rateAppointment,
   type Appointment,
   type PatientExercise,
   type OutboundNotification,
 } from '../services/api';
+
+const RATED_IDS_KEY = 'patient_rated_appointment_ids';
 
 export function HomeScreen() {
   const { patient } = useAuth();
@@ -29,6 +33,11 @@ export function HomeScreen() {
   const [todayDone, setTodayDone] = useState(0);
   const [lastNotif, setLastNotif] = useState<OutboundNotification | null>(null);
   const [error, setError] = useState('');
+  const [appointmentToRate, setAppointmentToRate] = useState<Appointment | null>(null);
+  const [ratingStars, setRatingStars] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [toast, setToast] = useState('');
 
   const load = useCallback(async () => {
     if (!patient?.id) return;
@@ -38,7 +47,7 @@ export function HomeScreen() {
         getMyAppointments(patient.id, 'scheduled', 1),
         getMyAppointments(patient.id),
         getMyExercises(patient.id),
-        getMyNotifications(patient.id, 1),
+        getMyNotifications(1),
       ]);
       const scheduled = Array.isArray(apts) ? apts : [];
       setNextApt(scheduled[0] ?? null);
@@ -53,6 +62,11 @@ export function HomeScreen() {
       setTodayExercises(exList.slice(0, 3));
       setTodayDone(forToday.length);
       setLastNotif(Array.isArray(notifs) && notifs.length ? notifs[0] : null);
+      const completed = (Array.isArray(allApts) ? allApts : []).filter((a) => a.status === 'completed');
+      const ratedRaw = await AsyncStorage.getItem(RATED_IDS_KEY).catch(() => null);
+      const ratedIds = new Set<string>(ratedRaw ? JSON.parse(ratedRaw) : []);
+      const unrated = completed.find((a) => !ratedIds.has(a.id) && (a.patientRating == null || a.patientRating === 0));
+      setAppointmentToRate(unrated ?? null);
     } catch {
       setError('حدث خطأ — إعادة المحاولة');
     }
@@ -67,6 +81,28 @@ export function HomeScreen() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  const handleSubmitRating = useCallback(async () => {
+    if (!appointmentToRate || ratingStars < 1) return;
+    setRatingSubmitting(true);
+    try {
+      await rateAppointment(appointmentToRate.id, ratingStars, ratingComment.slice(0, 200) || undefined);
+      const ratedRaw = await AsyncStorage.getItem(RATED_IDS_KEY).catch(() => '[]');
+      const rated = ratedRaw ? JSON.parse(ratedRaw) : [];
+      rated.push(appointmentToRate.id);
+      await AsyncStorage.setItem(RATED_IDS_KEY, JSON.stringify(rated));
+      setAppointmentToRate(null);
+      setRatingStars(0);
+      setRatingComment('');
+      setToast('شكراً على تقييمك! ⭐');
+      setTimeout(() => setToast(''), 3000);
+    } catch {
+      setToast('فشل إرسال التقييم');
+      setTimeout(() => setToast(''), 3000);
+    } finally {
+      setRatingSubmitting(false);
+    }
+  }, [appointmentToRate, ratingStars, ratingComment]);
 
   const todayDate = new Date().toLocaleDateString('ar-SA', {
     weekday: 'long',
@@ -124,6 +160,37 @@ export function HomeScreen() {
             </View>
           )}
         </View>
+
+        {appointmentToRate && (
+          <View style={[styles.card, styles.ratingCard]}>
+            <Text style={styles.ratingTitle}>كيف كانت جلستك مع د. {appointmentToRate.doctor?.nameAr ?? '—'}؟</Text>
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map((s) => (
+                <TouchableOpacity key={s} onPress={() => setRatingStars(s)} style={styles.starBtn}>
+                  <Text style={[styles.starText, { color: s <= ratingStars ? C.amber : 'rgba(255,255,255,0.15)' }]}>{s <= ratingStars ? '★' : '☆'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              placeholder="تعليق (اختياري، 200 حرف)"
+              placeholderTextColor={C.muted}
+              value={ratingComment}
+              onChangeText={(t) => setRatingComment(t.slice(0, 200))}
+              style={styles.ratingInput}
+              multiline
+              maxLength={200}
+            />
+            <TouchableOpacity
+              style={[styles.ratingSubmit, ratingSubmitting && styles.ratingSubmitDisabled]}
+              onPress={handleSubmitRating}
+              disabled={ratingStars < 1 || ratingSubmitting}
+            >
+              <Text style={styles.ratingSubmitText}>إرسال التقييم</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {toast ? <View style={styles.toast}><Text style={styles.toastText}>{toast}</Text></View> : null}
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
@@ -240,4 +307,15 @@ const styles = StyleSheet.create({
   errorText: { color: C.amber, textAlign: 'right' },
   retryBtn: { marginTop: 8, alignSelf: 'flex-end' },
   retryText: { color: C.cyan },
+  ratingCard: { marginBottom: 16 },
+  ratingTitle: { fontSize: 16, fontWeight: '600', color: C.text, marginBottom: 12, textAlign: 'right' },
+  starsRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginBottom: 12 },
+  starBtn: { padding: 4 },
+  starText: { fontSize: 28 },
+  ratingInput: { backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, borderRadius: radius.button, padding: 12, color: C.text, textAlign: 'right', minHeight: 60, marginBottom: 12 },
+  ratingSubmit: { backgroundColor: C.cyan, borderRadius: radius.button, padding: 14, alignItems: 'center' },
+  ratingSubmitDisabled: { opacity: 0.6 },
+  ratingSubmitText: { color: C.bg, fontWeight: '700' },
+  toast: { backgroundColor: C.green + '22', padding: 12, borderRadius: radius.small, marginBottom: 12, borderWidth: 1, borderColor: C.green },
+  toastText: { color: C.green, textAlign: 'right' },
 });

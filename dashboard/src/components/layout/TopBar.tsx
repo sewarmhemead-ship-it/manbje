@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, LogOut, Loader2, Bell } from 'lucide-react';
+import { Search, LogOut, Loader2, Bell, Menu } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,7 +24,7 @@ const roleLabels: Record<string, string> = {
   driver: 'سائق',
 };
 
-export function TopBar() {
+export function TopBar({ onMenuClick }: { onMenuClick?: () => void } = {}) {
   const { user, logout, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
@@ -82,6 +82,16 @@ export function TopBar() {
         backdropFilter: 'blur(20px)',
       }}
     >
+      {onMenuClick && (
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="lg:hidden rounded-lg p-2 text-[#4b5875] hover:bg-white/5 hover:text-[#dde6f5]"
+          aria-label="فتح القائمة"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+      )}
       <div className="relative flex-1 max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#4b5875]" />
         <Input

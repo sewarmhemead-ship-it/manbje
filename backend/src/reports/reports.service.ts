@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { Appointment, AppointmentStatus } from '../appointments/entities/appointment.entity';
 import { ClinicalSession } from '../clinical-sessions/entities/clinical-session.entity';
 import { Patient } from '../patients/entities/patient.entity';
@@ -198,6 +198,209 @@ export class ReportsService {
       .orderBy('month', 'ASC')
       .getRawMany<{ month: string; count: string }>();
     return raw.map((r) => ({ month: r.month, newPatients: parseInt(r.count, 10) }));
+  }
+
+  async getStats(startDate: string, endDate: string) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    const appointments = await this.appointmentsRepo.find({
+      where: { startTime: Between(start, end) },
+      relations: { patient: { user: true }, doctor: true },
+      order: { startTime: 'ASC' },
+    });
+
+    const totalAppointments = appointments.length;
+    const completed = appointments.filter((a) => a.status === AppointmentStatus.COMPLETED);
+    const cancelled = appointments.filter((a) => a.status === AppointmentStatus.CANCELLED);
+    const attendanceRate =
+      totalAppointments > 0 ? Math.round((completed.length / totalAppointments) * 100) : 0;
+
+    const patientIds = [...new Set(appointments.map((a) => a.patientId))];
+    const activePatients = patientIds.length;
+
+    const transport = await this.transportRepo.find({
+      where: { createdAt: Between(start, end) },
+    });
+    const transportCompleted = transport.filter(
+      (t) => t.status === 'completed' || t.status === 'arrived_at_center',
+    ).length;
+    const transportCancelled = transport.filter((t) => t.status === 'cancelled').length;
+
+    const sessionsWithRecovery = await this.sessionsRepo
+      .createQueryBuilder('cs')
+      .innerJoin('cs.appointment', 'a')
+      .where('a.start_time >= :start', { start })
+      .andWhere('a.start_time <= :end', { end })
+      .andWhere('cs.recovery_score IS NOT NULL')
+      .select('AVG(cs.recovery_score)', 'avg')
+      .getRawOne<{ avg: string }>();
+    const avgRecovery = sessionsWithRecovery?.avg
+      ? Math.round(parseFloat(sessionsWithRecovery.avg))
+      : null;
+
+    const last7Days: {
+      date: string;
+      dayName: string;
+      completed: number;
+      in_progress: number;
+      cancelled: number;
+      scheduled: number;
+    }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date();
+      day.setDate(day.getDate() - i);
+      const dayStr = day.toISOString().split('T')[0];
+      const dayAppts = appointments.filter(
+        (a) => new Date(a.startTime).toISOString().split('T')[0] === dayStr,
+      );
+      last7Days.push({
+        date: dayStr,
+        dayName: day.toLocaleDateString('ar-SA', { weekday: 'short' }),
+        completed: dayAppts.filter((a) => a.status === AppointmentStatus.COMPLETED).length,
+        in_progress: dayAppts.filter((a) => a.status === AppointmentStatus.IN_PROGRESS).length,
+        cancelled: dayAppts.filter((a) => a.status === AppointmentStatus.CANCELLED).length,
+        scheduled: dayAppts.filter((a) => a.status === AppointmentStatus.SCHEDULED).length,
+      });
+    }
+
+    const statusDist = {
+      scheduled: appointments.filter((a) => a.status === AppointmentStatus.SCHEDULED).length,
+      completed: completed.length,
+      cancelled: cancelled.length,
+      in_progress: appointments.filter((a) => a.status === AppointmentStatus.IN_PROGRESS).length,
+    };
+
+    const doctorMap = new Map<
+      string,
+      { doctorId: string; doctorName: string; total: number; completed: number }
+    >();
+    for (const appt of appointments) {
+      const key = appt.doctorId;
+      if (!doctorMap.has(key)) {
+        doctorMap.set(key, {
+          doctorId: key,
+          doctorName: (appt.doctor as { nameAr?: string })?.nameAr ?? 'غير معروف',
+          total: 0,
+          completed: 0,
+        });
+      }
+      const entry = doctorMap.get(key)!;
+      entry.total++;
+      if (appt.status === AppointmentStatus.COMPLETED) entry.completed++;
+    }
+    const topDoctors = [...doctorMap.values()]
+      .map((d) => ({
+        ...d,
+        attendanceRate: d.total > 0 ? Math.round((d.completed / d.total) * 100) : 0,
+      }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    const patientApptCount = new Map<string, number>();
+    for (const appt of appointments) {
+      const count = patientApptCount.get(appt.patientId) || 0;
+      patientApptCount.set(appt.patientId, count + 1);
+    }
+    const topPatientIds = [...patientApptCount.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => id);
+
+    const topPatients =
+      topPatientIds.length > 0
+        ? await this.patientsRepo.find({
+            where: topPatientIds.map((id) => ({ id })),
+            relations: { user: true },
+          })
+        : [];
+
+    const lastVisitByPatient = new Map<string, Date>();
+    for (const a of appointments) {
+      const t = new Date(a.startTime);
+      const prev = lastVisitByPatient.get(a.patientId);
+      if (!prev || t > prev) lastVisitByPatient.set(a.patientId, t);
+    }
+
+    const recoveryByPatient = new Map<string, number>();
+    if (topPatientIds.length > 0) {
+      const sessions = await this.sessionsRepo
+        .createQueryBuilder('cs')
+        .innerJoinAndSelect('cs.appointment', 'a')
+        .where('a.patient_id IN (:...ids)', { ids: topPatientIds })
+        .andWhere('cs.recovery_score IS NOT NULL')
+        .orderBy('a.start_time', 'DESC')
+        .getMany();
+      for (const s of sessions) {
+        const pid = (s.appointment as Appointment).patientId;
+        if (!recoveryByPatient.has(pid)) recoveryByPatient.set(pid, s.recoveryScore as number);
+      }
+    }
+
+    const mostActivePatients = topPatients.map((p) => ({
+      id: p.id,
+      nameAr: (p.user as { nameAr?: string })?.nameAr ?? 'غير معروف',
+      sessionCount: patientApptCount.get(p.id) || 0,
+      recoveryScore: recoveryByPatient.get(p.id) ?? null,
+      lastVisit: lastVisitByPatient.get(p.id)?.toISOString().slice(0, 10) ?? null,
+    }));
+
+    const transportByDay = last7Days.map((d) => ({
+      ...d,
+      transportCount: transport.filter(
+        (t) => new Date(t.createdAt).toISOString().split('T')[0] === d.date,
+      ).length,
+    }));
+
+    return {
+      totalAppointments,
+      attendanceRate,
+      activePatients,
+      completedSessions: completed.length,
+      transportTotal: transport.length,
+      transportCompleted,
+      transportCancelled,
+      avgRecovery,
+      last7Days,
+      statusDist,
+      topDoctors,
+      mostActivePatients,
+      transportByDay,
+    };
+  }
+
+  async getRecoveryTrends(patientIds: string[]) {
+    const ids = patientIds.slice(0, 3).filter(Boolean);
+    const results: { patientId: string; patientName: string; data: { date: string; score: number }[] }[] = [];
+
+    for (const patientId of ids) {
+      const patient = await this.patientsRepo.findOne({
+        where: { id: patientId },
+        relations: { user: true },
+      });
+      const sessions = await this.sessionsRepo
+        .createQueryBuilder('cs')
+        .innerJoinAndSelect('cs.appointment', 'a')
+        .where('a.patient_id = :patientId', { patientId })
+        .andWhere('cs.recovery_score IS NOT NULL')
+        .orderBy('a.start_time', 'ASC')
+        .take(20)
+        .getMany();
+
+      const data = sessions.map((s) => ({
+        date: new Date((s.appointment as Appointment).startTime).toISOString().split('T')[0],
+        score: s.recoveryScore as number,
+      }));
+
+      results.push({
+        patientId,
+        patientName: (patient?.user as { nameAr?: string })?.nameAr ?? 'غير معروف',
+        data,
+      });
+    }
+    return results;
   }
 
   async getTransportStats(startDate?: string, endDate?: string) {

@@ -21,6 +21,7 @@ export enum TransportRequestStatus {
   REQUESTED = 'requested',
   ASSIGNED = 'assigned',
   EN_ROUTE = 'en_route',
+  ARRIVED_AT_PICKUP = 'arrived_at_pickup',
   ARRIVED_AT_CENTER = 'arrived_at_center',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',

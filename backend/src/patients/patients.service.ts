@@ -29,6 +29,7 @@ export class PatientsService {
       diagnosis: dto.diagnosis ?? null,
       assignedDoctorId: dto.assignedDoctorId ?? null,
       arrivalPreference: dto.arrivalPreference ?? null,
+      mobilityAid: dto.mobilityAid ?? null,
       notes: dto.notes ?? null,
     });
     return this.patientsRepo.save(patient);

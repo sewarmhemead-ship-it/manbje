@@ -68,6 +68,9 @@ export class Patient {
   @Column({ name: 'arrival_preference', nullable: true })
   arrivalPreference: string | null;
 
+  @Column({ name: 'mobility_aid', nullable: true })
+  mobilityAid: string | null;
+
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 

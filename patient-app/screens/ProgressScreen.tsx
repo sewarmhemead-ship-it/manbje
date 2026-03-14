@@ -1,11 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Dimensions } from 'react-native';
-import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
 // Axis labels rendered via View/Text below
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { C, radius, fontMono } from '../constants/theme';
-import { getMyProgress, getClinicalSessions, getMyPrescriptions, type ProgressPoint, type ClinicalSession, type Prescription } from '../services/api';
+import { getMyProgress, getClinicalSessions, getMyPrescriptions, getMyVitals, getMyAppointments, type ProgressPoint, type ClinicalSession, type Prescription } from '../services/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_W = SCREEN_WIDTH - 32;
@@ -17,6 +17,8 @@ export function ProgressScreen() {
   const [points, setPoints] = useState<ProgressPoint[]>([]);
   const [session, setSession] = useState<ClinicalSession | null>(null);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [vitals, setVitals] = useState<{ painLevel?: number | null; recordedAt: string }[]>([]);
+  const [nextApt, setNextApt] = useState<{ startTime: string; doctor?: { nameAr?: string | null } } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,14 +26,19 @@ export function ProgressScreen() {
     if (!patient?.id) return;
     setError('');
     try {
-      const [progressData, sessionsData, rxData] = await Promise.all([
+      const [progressData, sessionsData, rxData, vitalsData, aptsData] = await Promise.all([
         getMyProgress(patient.id),
-        getClinicalSessions(patient.id, 1),
+        getClinicalSessions(patient.id, 2),
         getMyPrescriptions(patient.id),
+        getMyVitals(5).catch(() => []),
+        getMyAppointments(patient.id, 'scheduled', 1).catch(() => []),
       ]);
       setPoints(Array.isArray(progressData) ? progressData : []);
       setSession(Array.isArray(sessionsData) && sessionsData.length ? sessionsData[0] : null);
       setPrescriptions(Array.isArray(rxData) ? rxData : []);
+      setVitals(Array.isArray(vitalsData) ? vitalsData : []);
+      const scheduled = Array.isArray(aptsData) && aptsData.length ? aptsData[0] : null;
+      setNextApt(scheduled ?? null);
     } catch {
       setError('حدث خطأ — إعادة المحاولة');
     } finally {
@@ -106,9 +113,9 @@ export function ProgressScreen() {
               <Circle key={p.date} cx={getX(i)} cy={getY(p.recoveryScore)} r={i === sorted.length - 1 ? 5 : 3} fill={scoreColor} />
             ))}
             {[0, 50, 100].map((v) => (
-              <Text key={v} x={PAD.left - 4} y={getY(v)} fill={C.muted} fontSize="9" fontFamily={fontMono} textAnchor="end">
+              <SvgText key={v} x={PAD.left - 4} y={getY(v)} fill={C.muted} fontSize="9" fontFamily={fontMono} textAnchor="end">
                 {v}
-              </Text>
+              </SvgText>
             ))}
           </Svg>
         </View>
@@ -121,8 +128,15 @@ export function ProgressScreen() {
                 {session.appointment?.startTime ? new Date(session.appointment.startTime).toLocaleDateString('ar-SA') : '—'}
               </Text>
               <Text style={styles.doctorName}>د. {session.appointment?.doctor?.nameAr ?? '—'}</Text>
-              {session.subjective ? <Text style={styles.muted}>S: {session.subjective}</Text> : null}
-              {session.recoveryScore != null && (
+              {session.subjective ? (
+                <Text style={styles.muted}>S (شكوى المريض): {(session.subjective as string).slice(0, 100)}{(session.subjective as string).length > 100 ? '...' : ''}</Text>
+              ) : null}
+              {session.recoveryScore != null && points.length >= 2 && (
+                <Text style={[styles.scoreSmall, { fontFamily: fontMono }]}>
+                  نسبة التعافي: {points[points.length - 2]?.recoveryScore ?? '—'}% → {session.recoveryScore}%
+                </Text>
+              )}
+              {session.recoveryScore != null && (!points.length || points.length < 2) && (
                 <Text style={[styles.scoreSmall, { fontFamily: fontMono }]}>نسبة التعافي: {session.recoveryScore}%</Text>
               )}
             </View>
@@ -130,6 +144,50 @@ export function ProgressScreen() {
             <Text style={styles.muted}>لا توجد جلسات</Text>
           )}
         </View>
+
+        {vitals.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>آخر قياس ألم</Text>
+            <View style={styles.card}>
+              <View style={styles.painBars}>
+                {vitals.slice(0, 5).reverse().map((v, i) => {
+                  const p = v.painLevel ?? 0;
+                  const color = p >= 7 ? C.red : p >= 4 ? C.amber : C.green;
+                  return (
+                    <View key={v.recordedAt + i} style={styles.painBarRow}>
+                      <Text style={[styles.muted, { fontSize: 10 }]}>{new Date(v.recordedAt).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}</Text>
+                      <View style={styles.painBarBg}>
+                        <View style={[styles.painBarFill, { width: `${(p / 10) * 100}%`, backgroundColor: color }]} />
+                      </View>
+                      <Text style={[styles.painBarValue, { fontFamily: fontMono, color }]}>{p}/10</Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {(() => {
+                const p = vitals[0]?.painLevel ?? 0;
+                const color = p >= 7 ? C.red : p >= 4 ? C.amber : C.green;
+                return <Text style={[styles.muted, { marginTop: 8, color }]}>آخر قياس ألم: {p}/10</Text>;
+              })()}
+            </View>
+          </View>
+        )}
+
+        {nextApt && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>موعدك القادم</Text>
+            <View style={styles.card}>
+              <Text style={styles.doctorName}>د. {nextApt.doctor?.nameAr ?? '—'}</Text>
+              <Text style={styles.muted}>
+                {new Date(nextApt.startTime).toLocaleDateString('ar-SA')} · {new Date(nextApt.startTime).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {(() => {
+                const days = Math.ceil((new Date(nextApt.startTime).getTime() - Date.now()) / 86400000);
+                return <Text style={[styles.scoreSmall, { fontFamily: fontMono }]}>موعدك القادم بعد {days} يوم</Text>;
+              })()}
+            </View>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>الوصفات الطبية</Text>
@@ -197,4 +255,9 @@ const styles = StyleSheet.create({
   retryText: { color: C.cyan },
   axisLabels: { position: 'absolute', left: 8, top: PAD.top, height: CHART_H - PAD.top - PAD.bottom, justifyContent: 'space-between' },
   axisText: { fontSize: 9, color: C.muted },
+  painBars: { gap: 6 },
+  painBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  painBarBg: { flex: 1, height: 6, backgroundColor: C.s2, borderRadius: 3, overflow: 'hidden' },
+  painBarFill: { height: '100%', borderRadius: 3 },
+  painBarValue: { fontSize: 11, width: 28 },
 });

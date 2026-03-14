@@ -10,6 +10,7 @@ export const FRONTEND_PERMISSIONS: Record<string, UserRole[]> = {
   appointments_view: ['admin', 'doctor', 'nurse', 'receptionist'],
   appointments_create: ['admin', 'receptionist', 'doctor'],
   appointments_edit: ['admin', 'receptionist', 'doctor'],
+  appointments_append_note: ['admin', 'nurse', 'receptionist', 'doctor'],
   appointments_cancel: ['admin', 'receptionist'],
 
   sessions_view: ['admin', 'doctor', 'nurse'],
@@ -22,6 +23,10 @@ export const FRONTEND_PERMISSIONS: Record<string, UserRole[]> = {
   transport_view: ['admin', 'nurse', 'receptionist', 'driver'],
   transport_manage: ['admin', 'receptionist'],
   transport_driver: ['driver'],
+  transport_status_update: ['admin', 'nurse', 'driver'],
+
+  vitals_view: ['admin', 'doctor', 'nurse'],
+  vitals_create: ['admin', 'doctor', 'nurse'],
 
   billing_view: ['admin'],
   billing_manage: ['admin'],
@@ -42,6 +47,8 @@ export const FRONTEND_PERMISSIONS: Record<string, UserRole[]> = {
   users_change_role: ['admin'],
 
   receptionist_portal: ['receptionist'],
+  doctor_portal: ['admin', 'doctor'],
+  nurse_portal: ['admin', 'nurse'],
 };
 
 /** Use from components: const { hasPermission } = useAuth(); hasPermission('patients_view') */

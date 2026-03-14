@@ -119,4 +119,39 @@ export class AppointmentsController {
   ) {
     return this.appointmentsService.updateStatus(id, dto.status);
   }
+
+  @Patch(':id/rating')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.PATIENT)
+  async rate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { stars: number; comment?: string },
+    @CurrentUser() user: User,
+  ) {
+    const myPatient = await this.patientsService.findByUserId(user.id);
+    if (!myPatient) throw new ForbiddenException('Patient profile not found');
+    return this.appointmentsService.rate(id, myPatient.id, body.stars, body.comment ?? null);
+  }
+
+  @Patch(':id/cancel')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.PATIENT)
+  async cancelByPatient(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: User,
+  ) {
+    const myPatient = await this.patientsService.findByUserId(user.id);
+    if (!myPatient) throw new ForbiddenException('Patient profile not found');
+    return this.appointmentsService.cancelByPatient(id, myPatient.id);
+  }
+
+  @Patch(':id/note')
+  @UseGuards(PermissionsGuard)
+  @RequirePermission('appointments_append_note')
+  appendNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { note: string },
+  ) {
+    return this.appointmentsService.appendNote(id, body.note ?? '').then(() => ({}));
+  }
 }

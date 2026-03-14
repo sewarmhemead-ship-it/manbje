@@ -1,48 +1,108 @@
-# تطبيق مركز العلاج الفيزيائي — نظام إدارة شامل
+# PhysioCore — نظام إدارة مركز العلاج الفيزيائي
 
-نظام متكامل لإدارة مركز علاج فيزيائي: حجز المواعيد، سجل المرضى، رفع الأشعة والصور الطبية، التواصل مع المريض، وسيارات نقل المرضى.
+## نظرة عامة
+نظام متكامل لإدارة مراكز العلاج الفيزيائي يشمل:
+- لوحة تحكم ويب للطاقم الطبي والإداري
+- تطبيق موبايل للمرضى (Expo React Native)
+- API موحّد (NestJS + PostgreSQL)
 
-## المحتويات
+## هيكل المشروع
+```
+physiocore/
+├── backend/      # NestJS API
+├── dashboard/    # React + Vite + TypeScript
+└── patient-app/  # Expo React Native
+```
 
-| الملف | الوصف |
-|------|--------|
-| [SPECIFICATION.md](./SPECIFICATION.md) | المواصفات الكاملة: الأدوار، الوحدات، الميزات، وأفكار عالمية |
-| [docs/DATA-MODELS.md](./docs/DATA-MODELS.md) | نماذج البيانات والجداول والعلاقات |
-| [docs/USER-FLOWS.md](./docs/USER-FLOWS.md) | سيناريوهات الاستخدام والتمارين المنزلية الذكية |
-| [docs/STACK-RECOMMENDATION.md](./docs/STACK-RECOMMENDATION.md) | توصية التقنيات: NestJS، React، Flutter، PostgreSQL، Redis، S3 |
+## متطلبات التشغيل
+- Node.js 18+
+- PostgreSQL 15+
+- Docker (اختياري)
 
-## الوحدات الرئيسية
+## تشغيل سريع
+```bash
+# 1. قاعدة البيانات
+docker run --name physiocore-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=physiocore \
+  -p 5432:5432 -d postgres:15
 
-1. **حجز المواعيد** — تقويم، تأكيد، إلغاء، إعادة جدولة، تذكيرات
-2. **المرضى والسجل الطبي** — ملف مريض، EHR، خطط علاجية، جلسات
-3. **رفع الصور والأشعة** — صور أشعة وتقارير ومستندات مرتبطة بالمريض والجلسة
-4. **التواصل** — رسائل داخل التطبيق، إشعارات، SMS، بريد
-5. **سيارات نقل المرضى** — طلبات نقل، سائقون، مركبات، تتبع
-6. **لوحة الإدارة والتقارير** — إحصائيات، تقارير، إعدادات
+# 2. Backend
+cd backend
+cp .env.example .env
+npm install
+npm run start:dev
 
-## التقنيات المعتمدة (راجع docs/STACK-RECOMMENDATION.md)
+# 3. Dashboard
+cd dashboard
+cp .env.example .env
+npm install
+npm run dev
 
-- **Backend:** NestJS (Node.js) — تنبيهات لحظية ورفع ملفات كبيرة
-- **قاعدة البيانات:** PostgreSQL + Redis (سرعة المواعيد والكاش)
-- **التخزين:** AWS S3 أو Google Cloud Storage (أشعة وملفات مشفرة)
-- **Frontend ويب:** React.js + Tailwind CSS (لوحة تحكم)
-- **تطبيق موبايل:** Flutter (أندرويد وآيفون — مرضى، سائقون، أطباء)
-- **الإشعارات:** FCM للـ Push؛ Twilio أو خدمة محلية للـ SMS
+# 4. بيانات اختبار
+cd backend
+npm run db:seed-drugs
+npm run db:seed-test
+```
 
-## Phase 1 — Core Engine (منفذ)
+## حسابات الاختبار
+| الدور | الإيميل | كلمة المرور |
+|-------|---------|-------------|
+| مدير | admin@physiocore.test | Test@1234 |
+| دكتور | doctor@physiocore.test | Test@1234 |
+| ممرض | nurse@physiocore.test | Test@1234 |
+| استقبال | reception@physiocore.test | Test@1234 |
+| سائق | driver@physiocore.test | Test@1234 |
+| مريض (تطبيق) | +966500000010 | Test@1234 |
 
-- **Backend (NestJS)** في مجلد `backend/`:
-  - مصادقة JWT (تسجيل، دخول، `GET /auth/me`).
-  - صلاحيات حسب الأدوار: Admin, Doctor, Patient, Driver.
-  - جداول المستخدمين والمرضى (PostgreSQL) مع TypeORM.
-  - واجهات: تسجيل مستخدم، دخول، قائمة مستخدمين (Admin)، إنشاء/عرض/تعديل مرضى (Admin/Doctor)، وملف المريض (Patient).
-- راجع [backend/README.md](./backend/README.md) للإعداد والتشغيل.
+## الأدوار والصلاحيات
+| الدور | الوصول |
+|-------|--------|
+| Admin | كل الأقسام + إدارة المستخدمين |
+| Doctor | مواعيده + مرضاه + وصفاته + SOAP |
+| Nurse | المرضى + النقل + العلامات الحيوية |
+| Receptionist | الحجز + التسجيل + النقل |
+| Driver | رحلاته فقط |
+| Patient | تطبيق الموبايل فقط |
 
-## البدء
+## الـ API Endpoints الرئيسية
+```
+POST   /auth/login
+GET    /auth/me
+GET    /appointments/doctor/:id
+POST   /appointments
+GET    /patients
+POST   /patients
+GET    /transport/requests
+POST   /transport/requests
+GET    /reports/stats
+GET    /notifications
+POST   /prescriptions
+GET    /vitals/:patientId
+```
 
-1. مراجعة [SPECIFICATION.md](./SPECIFICATION.md) لفهم المتطلبات كاملة.
-2. مراجعة [docs/DATA-MODELS.md](./docs/DATA-MODELS.md) لبناء قاعدة البيانات.
-3. تشغيل Phase 1: `cd backend && npm install && npm run start:dev` (بعد إعداد PostgreSQL وملف `.env`).
+## متغيرات البيئة (backend/.env)
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=physiocore
+JWT_SECRET=your_secret_here
+PORT=3000
+CORS_ORIGIN=http://localhost:5173
+TWILIO_ACCOUNT_SID=        # اختياري
+TWILIO_AUTH_TOKEN=          # اختياري
+TWILIO_WHATSAPP_FROM=       # اختياري
+```
 
----
-تم إعداد هذا المشروع كتصميم شامل مستوحى من أفضل الممارسات العالمية في إدارة مراكز العلاج الفيزيائي والرعاية الصحية.
+## متغيرات البيئة (dashboard/.env)
+```env
+VITE_API_URL=http://localhost:3000
+```
+
+## Deploy
+- Backend: Railway (railway.app)
+- Dashboard: Vercel (vercel.com)
+- Database: Railway PostgreSQL plugin

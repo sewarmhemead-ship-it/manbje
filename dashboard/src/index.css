@@ -84,6 +84,108 @@ body {
   animation: fadeUp 0.3s ease-out both;
 }
 
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.page-enter {
+  animation: pageEnter 0.25s ease both;
+}
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hoverable-card {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  position: relative;
+}
+.hoverable-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, #22d3ee, #a78bfa, transparent);
+  border-radius: 16px 16px 0 0;
+  pointer-events: none;
+}
+.hoverable-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(34,211,238,0.2) !important;
+}
+.hoverable-card:active {
+  transform: translateY(0);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* Focus rings */
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgba(34,211,238,0.5);
+  outline-offset: 2px;
+}
+
+/* Text selection */
+::selection {
+  background: rgba(34,211,238,0.2);
+  color: #dde6f5;
+}
+
+html { scroll-behavior: smooth; }
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .mobile-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(2px);
+  }
+  .mobile-sidebar-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 280px;
+    z-index: 40;
+    transform: translateX(0);
+    transition: transform 0.25s ease;
+  }
+  .mobile-sidebar-drawer.closed {
+    transform: translateX(100%);
+  }
+  .table-scroll-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 /* Reports print: hide layout UI, show only report content, white bg */
 @media print {
   body * {

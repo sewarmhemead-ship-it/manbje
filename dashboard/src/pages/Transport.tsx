@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Truck, User, Car, Plus, Loader2 } from 'lucide-react';
+import { Truck, User, Car, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,8 @@ import { apiGet, apiPatch, apiPost } from '@/lib/api';
 import { useToast } from '@/lib/toast';
 import { MOCK_TRANSPORT_REQUESTS, MOCK_VEHICLES, MOCK_DRIVERS, isDemoMode } from '@/lib/mock-data';
 import { getStatusLabel, getStatusBadgeStyle } from '@/lib/statusLabels';
+import { SkeletonTable } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const STATUS_FILTER = ['all', 'en_route', 'requested', 'assigned', 'arrived_at_center', 'completed'] as const;
 const today = new Date().toISOString().slice(0, 10);
@@ -113,14 +115,14 @@ export function Transport() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-amber-400" />
+      <div className="page-enter p-6">
+        <SkeletonTable rows={6} cols={4} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#07090f] font-sans text-gray-100">
+    <div className="page-enter min-h-screen bg-[#07090f] font-sans text-gray-100">
       <div className="sticky top-0 z-20 border-b border-amber-500/20 bg-[#07090f]/95 px-6 py-4 backdrop-blur">
         <h1 className="text-xl font-bold text-amber-400">Transport Management</h1>
       </div>
@@ -155,9 +157,8 @@ export function Transport() {
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
                   {filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-center">
-                      <Truck className="h-12 w-12 text-amber-500/50 mb-3" />
-                      <p className="text-[#4b5875]">لا توجد طلبات نقل اليوم</p>
+                    <div className="p-6">
+                      <EmptyState icon="🚐" title="لا طلبات نقل اليوم" />
                     </div>
                   ) : (
                   <table className="w-full text-sm">
