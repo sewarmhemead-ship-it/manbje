@@ -55,6 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
+    // مسح الجلسة القديمة أولاً حتى لا يظهر نفس الحساب السابق
+    localStorage.removeItem('token');
+    setState((s) => ({ ...s, user: null, token: null }));
+
     const isDemo = import.meta.env.VITE_DEMO_MODE === 'true';
     if (isDemo) {
       const fakeToken = 'demo-token';
@@ -62,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: 'demo-user-id',
         email: email || 'demo@example.com',
         role: 'admin',
-        nameAr: 'عرض تجريبي',
+        nameAr: email ? `عرض تجريبي (${email})` : 'عرض تجريبي',
         nameEn: 'Demo User',
         phone: null,
         isActive: true,

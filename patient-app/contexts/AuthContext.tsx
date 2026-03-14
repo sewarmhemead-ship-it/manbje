@@ -67,6 +67,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (phone: string, password: string) => {
+    // مسح الجلسة القديمة أولاً حتى لا يظهر نفس الحساب السابق
+    await SecureStore.deleteItemAsync('jwt_token');
+    await SecureStore.deleteItemAsync('patient_user');
+    setToken(null);
+    setUser(null);
+    setPatient(null);
+
     const { data } = await api.post<{ user: User; accessToken: string }>('/auth/login', { phone, password });
     if (data.user.role !== 'patient') {
       throw new Error('هذا التطبيق للمرضى فقط');
