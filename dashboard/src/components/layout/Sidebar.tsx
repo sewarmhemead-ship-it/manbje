@@ -93,6 +93,7 @@ export function Sidebar({
             key={to}
             to={to}
             end={end}
+            onClick={onMobileClose}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200',
