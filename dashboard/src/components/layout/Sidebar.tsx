@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
@@ -46,11 +46,20 @@ export function Sidebar({
   onMobileClose?: () => void;
 } = {}) {
   const { hasPermission } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [failedCount, setFailedCount] = useState(0);
   const nav = NAV_ITEMS.filter((item) => !item.permission || hasPermission(item.permission));
   useEffect(() => {
     apiGet<{ failed: number }>('/notifications/stats').then((s) => setFailedCount(s.failed ?? 0)).catch(() => {});
   }, []);
+
+  const handleNavClick = (to: string, end: boolean) => {
+    const path = location.pathname;
+    const isCurrent = end && to === '/' ? path === '/' : path === to || (!end && path.startsWith(to));
+    if (!isCurrent) navigate(to);
+    onMobileClose?.();
+  };
 
   return (
     <>
@@ -63,7 +72,7 @@ export function Sidebar({
       )}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r transition-all duration-300 max-lg:fixed max-lg:right-0 max-lg:left-auto max-lg:z-50 max-lg:shadow-xl',
+          'fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r transition-all duration-300 max-lg:fixed max-lg:right-0 max-lg:left-auto max-lg:z-[60] max-lg:shadow-xl',
           !mobileOpen && 'max-lg:pointer-events-none max-lg:translate-x-full'
         )}
         style={{ background: '#0b0f1a', borderColor: 'rgba(255,255,255,0.06)' }}
@@ -87,32 +96,31 @@ export function Sidebar({
           </button>
         )}
       </div>
-      <nav className="flex-1 space-y-0.5 p-4">
-        {nav.map(({ to, label, icon: Icon, end, badgeKey }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onMobileClose}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200',
+      <nav className="flex-1 space-y-0.5 p-4 overflow-y-auto">
+        {nav.map(({ to, label, icon: Icon, end, badgeKey }) => {
+          const path = location.pathname;
+          const isActive = end && to === '/' ? path === '/' : path === to || (!end && path.startsWith(to));
+          return (
+            <button
+              key={to}
+              type="button"
+              onClick={() => handleNavClick(to, end ?? true)}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 text-right',
                 isActive && 'bg-[rgba(34,211,238,0.08)]'
-              )
-            }
-            style={({ isActive }) => ({
-              color: isActive ? '#22d3ee' : '#4b5875',
-            })}
-          >
-            <Icon className="h-5 w-5 shrink-0" />
-            {label}
-            {badgeKey === 'notifications' && failedCount > 0 && (
-              <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500/90 px-1.5 text-xs font-bold text-white">
-                {failedCount > 99 ? '99+' : failedCount}
-              </span>
-            )}
-          </NavLink>
-        ))}
+              )}
+              style={{ color: isActive ? '#22d3ee' : '#4b5875' }}
+            >
+              <Icon className="h-5 w-5 shrink-0" />
+              {label}
+              {badgeKey === 'notifications' && failedCount > 0 && (
+                <span className="ml-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500/90 px-1.5 text-xs font-bold text-white">
+                  {failedCount > 99 ? '99+' : failedCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </nav>
     </aside>
     </>

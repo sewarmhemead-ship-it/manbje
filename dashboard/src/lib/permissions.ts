@@ -37,7 +37,7 @@ export const FRONTEND_PERMISSIONS: Record<string, UserRole[]> = {
   notifications_view: ['admin', 'receptionist'],
   notifications_send: ['admin'],
 
-  settings_view: ['admin', 'doctor', 'nurse', 'receptionist'],
+  settings_view: ['admin', 'doctor', 'nurse', 'receptionist', 'driver'],
   settings_edit: ['admin'],
 
   users_view: ['admin'],
