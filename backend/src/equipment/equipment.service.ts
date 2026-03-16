@@ -12,8 +12,9 @@ export class EquipmentService {
     private equipmentRepo: Repository<Equipment>,
   ) {}
 
-  async create(dto: CreateEquipmentDto): Promise<Equipment> {
+  async create(dto: CreateEquipmentDto, companyId: string): Promise<Equipment> {
     const equipment = this.equipmentRepo.create({
+      companyId,
       name: dto.name,
       description: dto.description ?? null,
       isAvailable: dto.isAvailable ?? true,
@@ -21,27 +22,32 @@ export class EquipmentService {
     return this.equipmentRepo.save(equipment);
   }
 
-  async findAll(availableOnly = false): Promise<Equipment[]> {
+  async findAll(companyId: string | null, availableOnly = false): Promise<Equipment[]> {
+    const where: any = {};
+    if (companyId) where.companyId = companyId;
+    if (availableOnly) where.isAvailable = true;
     return this.equipmentRepo.find({
-      where: availableOnly ? { isAvailable: true } : undefined,
+      where: Object.keys(where).length ? where : undefined,
       order: { name: 'ASC' },
     });
   }
 
-  async findOne(id: string): Promise<Equipment> {
-    const equipment = await this.equipmentRepo.findOne({ where: { id } });
+  async findOne(id: string, companyId?: string | null): Promise<Equipment> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
+    const equipment = await this.equipmentRepo.findOne({ where });
     if (!equipment) throw new NotFoundException('Equipment not found');
     return equipment;
   }
 
-  async update(id: string, dto: UpdateEquipmentDto): Promise<Equipment> {
-    const equipment = await this.findOne(id);
+  async update(id: string, dto: UpdateEquipmentDto, companyId?: string | null): Promise<Equipment> {
+    const equipment = await this.findOne(id, companyId);
     Object.assign(equipment, dto);
     return this.equipmentRepo.save(equipment);
   }
 
-  async remove(id: string): Promise<void> {
-    const equipment = await this.findOne(id);
+  async remove(id: string, companyId?: string | null): Promise<void> {
+    const equipment = await this.findOne(id, companyId);
     await this.equipmentRepo.remove(equipment);
   }
 }

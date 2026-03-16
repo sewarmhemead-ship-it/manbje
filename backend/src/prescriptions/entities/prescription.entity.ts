@@ -11,6 +11,7 @@ import { Patient } from '../../patients/entities/patient.entity';
 import { User } from '../../users/entities/user.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
 import { PrescriptionItem } from './prescription-item.entity';
+import { Company } from '../../companies/entities/company.entity';
 
 export enum PrescriptionStatus {
   ACTIVE = 'active',
@@ -24,7 +25,14 @@ export class Prescription {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'rx_number', unique: true })
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
+
+  @Column({ name: 'rx_number' })
   rxNumber: string;
 
   @Column({ name: 'patient_id', type: 'uuid' })

@@ -11,6 +11,7 @@ import { PatientsModule } from '../patients/patients.module';
 import { TransportModule } from '../transport/transport.module';
 import { BillingModule } from '../billing/billing.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     forwardRef(() => TransportModule),
     BillingModule,
     NotificationsModule,
+    AuditModule,
   ],
   providers: [AppointmentsService],
   controllers: [AppointmentsController],

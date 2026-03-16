@@ -16,6 +16,7 @@ export class NotificationsService {
     title: string,
     message: string,
     metadata?: Record<string, unknown>,
+    companyId?: string,
   ): Promise<Notification> {
     const notification = this.notificationRepo.create({
       userId,
@@ -23,6 +24,7 @@ export class NotificationsService {
       title,
       message,
       metadata: metadata ?? null,
+      companyId: companyId ?? null,
     });
     return this.notificationRepo.save(notification);
   }

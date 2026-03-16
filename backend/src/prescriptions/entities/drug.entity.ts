@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Company } from '../../companies/entities/company.entity';
 
 export enum DrugForm {
   TABLET = 'tablet',
@@ -24,6 +25,13 @@ export enum DrugCategory {
 export class Drug {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 
   @Column({ name: 'name_ar' })
   nameAr: string;

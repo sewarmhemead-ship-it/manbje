@@ -9,11 +9,19 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { TransportVehicle } from './transport-vehicle.entity';
+import { Company } from '../../companies/entities/company.entity';
 
 @Entity('transport_drivers')
 export class TransportDriver {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 
   @Column({ name: 'user_id', type: 'uuid', unique: true })
   userId: string;

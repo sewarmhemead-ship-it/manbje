@@ -12,6 +12,7 @@ import { Patient } from '../../patients/entities/patient.entity';
 import { Appointment } from '../../appointments/entities/appointment.entity';
 import { InvoiceItem } from './invoice-item.entity';
 import { Payment } from './payment.entity';
+import { Company } from '../../companies/entities/company.entity';
 
 export enum InvoiceStatus {
   DRAFT = 'draft',
@@ -34,7 +35,14 @@ export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'invoice_number', unique: true })
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
+
+  @Column({ name: 'invoice_number' })
   invoiceNumber: string;
 
   @Column({ name: 'patient_id', type: 'uuid' })

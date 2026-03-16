@@ -11,8 +11,9 @@ export class SchedulesService {
     private schedulesRepo: Repository<Schedule>,
   ) {}
 
-  async create(dto: CreateScheduleDto): Promise<Schedule> {
+  async create(dto: CreateScheduleDto, companyId: string): Promise<Schedule> {
     const schedule = this.schedulesRepo.create({
+      companyId,
       doctorId: dto.doctorId,
       dayOfWeek: dto.dayOfWeek,
       startTime: dto.startTime,
@@ -21,9 +22,11 @@ export class SchedulesService {
     return this.schedulesRepo.save(schedule);
   }
 
-  async findByDoctor(doctorId: string): Promise<Schedule[]> {
+  async findByDoctor(doctorId: string, companyId?: string | null): Promise<Schedule[]> {
+    const where: any = { doctorId };
+    if (companyId) where.companyId = companyId;
     return this.schedulesRepo.find({
-      where: { doctorId },
+      where,
       order: { dayOfWeek: 'ASC', startTime: 'ASC' },
       relations: { doctor: true },
     });
@@ -55,17 +58,19 @@ export class SchedulesService {
     return t.slice(0, 8);
   }
 
-  async findOne(id: string): Promise<Schedule> {
+  async findOne(id: string, companyId?: string | null): Promise<Schedule> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
     const schedule = await this.schedulesRepo.findOne({
-      where: { id },
+      where,
       relations: { doctor: true },
     });
     if (!schedule) throw new NotFoundException('Schedule not found');
     return schedule;
   }
 
-  async remove(id: string): Promise<void> {
-    const schedule = await this.findOne(id);
+  async remove(id: string, companyId?: string | null): Promise<void> {
+    const schedule = await this.findOne(id, companyId);
     await this.schedulesRepo.remove(schedule);
   }
 }

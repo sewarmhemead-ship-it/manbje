@@ -31,57 +31,49 @@ export class ReportsService {
     return { start, end };
   }
 
-  async getDashboardStats(startDate?: string, endDate?: string) {
+  async getDashboardStats(companyId: string | null, startDate?: string, endDate?: string) {
     const { start, end } = this.parseRange(startDate, endDate);
 
-    const completedCount = await this.appointmentsRepo
-      .createQueryBuilder('a')
-      .where('a.start_time >= :start', { start })
-      .andWhere('a.start_time <= :end', { end })
+    const baseAppt = () => {
+      const q = this.appointmentsRepo.createQueryBuilder('a');
+      q.where('a.start_time >= :start', { start }).andWhere('a.start_time <= :end', { end });
+      if (companyId) q.andWhere('a.company_id = :companyId', { companyId });
+      return q;
+    };
+
+    const completedCount = await baseAppt()
       .andWhere('a.status = :completed', { completed: AppointmentStatus.COMPLETED })
       .getCount();
 
-    const sessionsWithRecovery = await this.sessionsRepo
+    const sessionsQb = this.sessionsRepo
       .createQueryBuilder('cs')
       .innerJoin('cs.appointment', 'a')
       .where('a.start_time >= :start', { start })
       .andWhere('a.start_time <= :end', { end })
-      .andWhere('cs.recovery_score IS NOT NULL')
-      .select('AVG(cs.recovery_score)', 'avg')
-      .getRawOne<{ avg: string }>();
+      .andWhere('cs.recovery_score IS NOT NULL');
+    if (companyId) sessionsQb.andWhere('a.company_id = :companyId', { companyId });
+    const sessionsWithRecovery = await sessionsQb.select('AVG(cs.recovery_score)', 'avg').getRawOne<{ avg: string }>();
     const avgRecovery = sessionsWithRecovery?.avg ? Math.round(parseFloat(sessionsWithRecovery.avg)) : 0;
 
-    const totalInRange = await this.appointmentsRepo
-      .createQueryBuilder('a')
-      .where('a.start_time >= :start', { start })
-      .andWhere('a.start_time <= :end', { end })
-      .getCount();
-    const inProgressCount = await this.appointmentsRepo
-      .createQueryBuilder('a')
-      .where('a.start_time >= :start', { start })
-      .andWhere('a.start_time <= :end', { end })
-      .andWhere('a.status = :ip', { ip: AppointmentStatus.IN_PROGRESS })
-      .getCount();
+    const totalInRange = await baseAppt().getCount();
+    const inProgressCount = await baseAppt().andWhere('a.status = :ip', { ip: AppointmentStatus.IN_PROGRESS }).getCount();
     const attendanceRate = totalInRange > 0 ? Math.round(((completedCount + inProgressCount) / totalInRange) * 100) : 0;
 
-    const cancellations = await this.appointmentsRepo
-      .createQueryBuilder('a')
-      .where('a.start_time >= :start', { start })
-      .andWhere('a.start_time <= :end', { end })
-      .andWhere('a.status = :cancelled', { cancelled: AppointmentStatus.CANCELLED })
-      .getCount();
+    const cancellations = await baseAppt().andWhere('a.status = :cancelled', { cancelled: AppointmentStatus.CANCELLED }).getCount();
 
-    const newPatients = await this.patientsRepo
+    const patientsQb = this.patientsRepo
       .createQueryBuilder('p')
       .where('p.created_at >= :start', { start })
-      .andWhere('p.created_at <= :end', { end })
-      .getCount();
+      .andWhere('p.created_at <= :end', { end });
+    if (companyId) patientsQb.andWhere('p.company_id = :companyId', { companyId });
+    const newPatients = await patientsQb.getCount();
 
     let revenue = 0;
     try {
       revenue = await this.billingService.getRevenueForDateRange(
         start.toISOString().slice(0, 10),
         end.toISOString().slice(0, 10),
+        companyId ?? undefined,
       );
     } catch {
       revenue = 0;
@@ -97,7 +89,7 @@ export class ReportsService {
     };
   }
 
-  async getSessionsByDay(startDate?: string, endDate?: string): Promise<{ date: string; count: number }[]> {
+  async getSessionsByDay(companyId: string | null, startDate?: string, endDate?: string): Promise<{ date: string; count: number }[]> {
     const { start, end } = this.parseRange(startDate, endDate);
     const qb = this.appointmentsRepo
       .createQueryBuilder('a')
@@ -108,11 +100,12 @@ export class ReportsService {
       .andWhere('a.status = :completed', { completed: AppointmentStatus.COMPLETED })
       .groupBy("DATE(a.start_time)")
       .orderBy("DATE(a.start_time)", 'ASC');
+    if (companyId) qb.andWhere('a.company_id = :companyId', { companyId });
     const raw = await qb.getRawMany<{ date: string; count: string }>();
     return raw.map((r) => ({ date: r.date, count: parseInt(r.count, 10) }));
   }
 
-  async getHeatmap(startDate?: string, endDate?: string): Promise<{ dayOfWeek: number; hour: number; count: number }[]> {
+  async getHeatmap(companyId: string | null, startDate?: string, endDate?: string): Promise<{ dayOfWeek: number; hour: number; count: number }[]> {
     const { start, end } = this.parseRange(startDate, endDate);
     const qb = this.appointmentsRepo
       .createQueryBuilder('a')
@@ -124,6 +117,7 @@ export class ReportsService {
       .andWhere('a.status = :completed', { completed: AppointmentStatus.COMPLETED })
       .groupBy('EXTRACT(DOW FROM a.start_time)')
       .addGroupBy('EXTRACT(HOUR FROM a.start_time)');
+    if (companyId) qb.andWhere('a.company_id = :companyId', { companyId });
     const raw = await qb.getRawMany<{ dayOfWeek: string; hour: string; count: string }>();
     return raw.map((r) => ({
       dayOfWeek: parseInt(r.dayOfWeek, 10),
@@ -132,12 +126,12 @@ export class ReportsService {
     }));
   }
 
-  async getDoctorPerformance(startDate?: string, endDate?: string): Promise<
+  async getDoctorPerformance(companyId: string | null, startDate?: string, endDate?: string): Promise<
     { doctorId: string; doctorName: string; sessionsCount: number; avgRecovery: number; attendanceRate: number }[]
   > {
     const { start, end } = this.parseRange(startDate, endDate);
 
-    const byDoctor = await this.appointmentsRepo
+    const byDoctorQb = this.appointmentsRepo
       .createQueryBuilder('a')
       .innerJoin('a.doctor', 'd')
       .select('a.doctor_id', 'doctorId')
@@ -152,25 +146,22 @@ export class ReportsService {
         'inProgress',
       )
       .where('a.start_time >= :start', { start })
-      .andWhere('a.start_time <= :end', { end })
-      .groupBy('a.doctor_id')
-      .addGroupBy('d.name_ar')
-      .getRawMany<{ doctorId: string; doctorName: string; total: string; completed: string; inProgress: string }>();
+      .andWhere('a.start_time <= :end', { end });
+    if (companyId) byDoctorQb.andWhere('a.company_id = :companyId', { companyId });
+    const byDoctor = await byDoctorQb.groupBy('a.doctor_id').addGroupBy('d.name_ar').getRawMany<{ doctorId: string; doctorName: string; total: string; completed: string; inProgress: string }>();
 
     const doctorIds = byDoctor.map((r) => r.doctorId);
     let recoveryMap: Record<string, number> = {};
     if (doctorIds.length > 0) {
-      const recoveryRaw = await this.sessionsRepo
+      const recQb = this.sessionsRepo
         .createQueryBuilder('cs')
         .innerJoin('cs.appointment', 'a')
         .where('a.doctor_id IN (:...ids)', { ids: doctorIds })
         .andWhere('a.start_time >= :start', { start })
         .andWhere('a.start_time <= :end', { end })
-        .andWhere('cs.recovery_score IS NOT NULL')
-        .select('a.doctor_id', 'doctorId')
-        .addSelect('AVG(cs.recovery_score)', 'avg')
-        .groupBy('a.doctor_id')
-        .getRawMany<{ doctorId: string; avg: string }>();
+        .andWhere('cs.recovery_score IS NOT NULL');
+      if (companyId) recQb.andWhere('a.company_id = :companyId', { companyId });
+      const recoveryRaw = await recQb.select('a.doctor_id', 'doctorId').addSelect('AVG(cs.recovery_score)', 'avg').groupBy('a.doctor_id').getRawMany<{ doctorId: string; avg: string }>();
       recoveryMap = Object.fromEntries(recoveryRaw.map((r) => [r.doctorId, Math.round(parseFloat(r.avg || '0'))]));
     }
 
@@ -189,25 +180,28 @@ export class ReportsService {
     });
   }
 
-  async getPatientGrowth(): Promise<{ month: string; newPatients: number }[]> {
-    const raw = await this.patientsRepo
+  async getPatientGrowth(companyId: string | null): Promise<{ month: string; newPatients: number }[]> {
+    const qb = this.patientsRepo
       .createQueryBuilder('p')
       .select("TO_CHAR(p.created_at, 'YYYY-MM')", 'month')
       .addSelect('COUNT(*)', 'count')
       .groupBy("TO_CHAR(p.created_at, 'YYYY-MM')")
-      .orderBy('month', 'ASC')
-      .getRawMany<{ month: string; count: string }>();
+      .orderBy('month', 'ASC');
+    if (companyId) qb.where('p.company_id = :companyId', { companyId });
+    const raw = await qb.getRawMany<{ month: string; count: string }>();
     return raw.map((r) => ({ month: r.month, newPatients: parseInt(r.count, 10) }));
   }
 
-  async getStats(startDate: string, endDate: string) {
+  async getStats(companyId: string | null, startDate: string, endDate: string) {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
+    const where: any = { startTime: Between(start, end) };
+    if (companyId) where.companyId = companyId;
     const appointments = await this.appointmentsRepo.find({
-      where: { startTime: Between(start, end) },
+      where,
       relations: { patient: { user: true }, doctor: true },
       order: { startTime: 'ASC' },
     });
@@ -221,22 +215,24 @@ export class ReportsService {
     const patientIds = [...new Set(appointments.map((a) => a.patientId))];
     const activePatients = patientIds.length;
 
+    const transportWhere: any = { createdAt: Between(start, end) };
+    if (companyId) transportWhere.companyId = companyId;
     const transport = await this.transportRepo.find({
-      where: { createdAt: Between(start, end) },
+      where: transportWhere,
     });
     const transportCompleted = transport.filter(
       (t) => t.status === 'completed' || t.status === 'arrived_at_center',
     ).length;
     const transportCancelled = transport.filter((t) => t.status === 'cancelled').length;
 
-    const sessionsWithRecovery = await this.sessionsRepo
+    const sessionsAvgQb = this.sessionsRepo
       .createQueryBuilder('cs')
       .innerJoin('cs.appointment', 'a')
       .where('a.start_time >= :start', { start })
       .andWhere('a.start_time <= :end', { end })
-      .andWhere('cs.recovery_score IS NOT NULL')
-      .select('AVG(cs.recovery_score)', 'avg')
-      .getRawOne<{ avg: string }>();
+      .andWhere('cs.recovery_score IS NOT NULL');
+    if (companyId) sessionsAvgQb.andWhere('a.company_id = :companyId', { companyId });
+    const sessionsWithRecovery = await sessionsAvgQb.select('AVG(cs.recovery_score)', 'avg').getRawOne<{ avg: string }>();
     const avgRecovery = sessionsWithRecovery?.avg
       ? Math.round(parseFloat(sessionsWithRecovery.avg))
       : null;
@@ -309,10 +305,11 @@ export class ReportsService {
       .slice(0, 5)
       .map(([id]) => id);
 
+    const topPatientsWhere = topPatientIds.length > 0 ? topPatientIds.map((id) => ({ id })) : [];
     const topPatients =
-      topPatientIds.length > 0
+      topPatientsWhere.length > 0
         ? await this.patientsRepo.find({
-            where: topPatientIds.map((id) => ({ id })),
+            where: topPatientsWhere,
             relations: { user: true },
           })
         : [];
@@ -371,13 +368,15 @@ export class ReportsService {
     };
   }
 
-  async getRecoveryTrends(patientIds: string[]) {
+  async getRecoveryTrends(companyId: string | null, patientIds: string[]) {
     const ids = patientIds.slice(0, 3).filter(Boolean);
     const results: { patientId: string; patientName: string; data: { date: string; score: number }[] }[] = [];
 
     for (const patientId of ids) {
+      const where: any = { id: patientId };
+      if (companyId) where.companyId = companyId;
       const patient = await this.patientsRepo.findOne({
-        where: { id: patientId },
+        where,
         relations: { user: true },
       });
       const sessions = await this.sessionsRepo
@@ -403,35 +402,37 @@ export class ReportsService {
     return results;
   }
 
-  async getTransportStats(startDate?: string, endDate?: string) {
+  async getTransportStats(companyId: string | null, startDate?: string, endDate?: string) {
     const { start, end } = this.parseRange(startDate, endDate);
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayEnd = new Date(todayStart);
     todayEnd.setHours(23, 59, 59, 999);
 
-    const totalTrips = await this.transportRepo
-      .createQueryBuilder('tr')
-      .where('tr.created_at >= :start', { start })
-      .andWhere('tr.created_at <= :end', { end })
-      .getCount();
+    const trBase = (qb: any) => {
+      if (companyId) qb.andWhere('tr.company_id = :companyId', { companyId });
+      return qb;
+    };
 
-    const todayTrips = await this.transportRepo
-      .createQueryBuilder('tr')
-      .where('tr.created_at >= :todayStart', { todayStart })
-      .andWhere('tr.created_at <= :todayEnd', { todayEnd })
-      .getCount();
+    const totalTrips = await trBase(
+      this.transportRepo.createQueryBuilder('tr').where('tr.created_at >= :start', { start }).andWhere('tr.created_at <= :end', { end }),
+    ).getCount();
 
-    const byMobility = await this.transportRepo
+    const todayTrips = await trBase(
+      this.transportRepo.createQueryBuilder('tr').where('tr.created_at >= :todayStart', { todayStart }).andWhere('tr.created_at <= :todayEnd', { todayEnd }),
+    ).getCount();
+
+    const byMobilityQb = this.transportRepo
       .createQueryBuilder('tr')
       .select('tr.mobility_need', 'type')
       .addSelect('COUNT(*)', 'count')
       .where('tr.created_at >= :start', { start })
       .andWhere('tr.created_at <= :end', { end })
-      .groupBy('tr.mobility_need')
-      .getRawMany<{ type: string | null; count: string }>();
+      .groupBy('tr.mobility_need');
+    if (companyId) byMobilityQb.andWhere('tr.company_id = :companyId', { companyId });
+    const byMobility = await byMobilityQb.getRawMany<{ type: string | null; count: string }>();
 
-    const byVehicle = await this.transportRepo
+    const byVehicleQb = this.transportRepo
       .createQueryBuilder('tr')
       .leftJoin('tr.vehicle', 'v')
       .select('tr.vehicle_id', 'vehicleId')
@@ -441,8 +442,9 @@ export class ReportsService {
       .andWhere('tr.created_at <= :end', { end })
       .andWhere('tr.vehicle_id IS NOT NULL')
       .groupBy('tr.vehicle_id')
-      .addGroupBy('v.plate_number')
-      .getRawMany<{ vehicleId: string; plate: string; tripCount: string }>();
+      .addGroupBy('v.plate_number');
+    if (companyId) byVehicleQb.andWhere('tr.company_id = :companyId', { companyId });
+    const byVehicle = await byVehicleQb.getRawMany<{ vehicleId: string; plate: string; tripCount: string }>();
 
     return {
       totalTrips,

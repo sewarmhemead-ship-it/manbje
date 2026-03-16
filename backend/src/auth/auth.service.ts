@@ -2,6 +2,7 @@ import { Injectable, ConflictException, UnauthorizedException, BadRequestExcepti
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
+import { CompaniesService } from '../companies/companies.service';
 import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -11,6 +12,7 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private companiesService: CompaniesService,
   ) {}
 
   async register(dto: RegisterDto): Promise<{ user: User; accessToken: string }> {
@@ -18,8 +20,13 @@ export class AuthService {
     if (existing) {
       throw new ConflictException('Email already registered');
     }
+    const company = await this.companiesService.getDefaultOrFirst();
+    if (!company) {
+      throw new BadRequestException('No company configured. Please run db:seed-company first.');
+    }
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.usersService.create({
+      companyId: company.id,
       email: dto.email,
       passwordHash,
       role: dto.role,

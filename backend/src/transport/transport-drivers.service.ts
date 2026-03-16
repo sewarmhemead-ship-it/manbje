@@ -10,25 +10,32 @@ export class TransportDriversService {
     private driversRepo: Repository<TransportDriver>,
   ) {}
 
-  async create(data: {
-    userId: string;
-    vehicleId?: string;
-    licenseNumber?: string;
-  }): Promise<TransportDriver> {
-    const driver = this.driversRepo.create(data);
+  async create(
+    companyId: string,
+    data: {
+      userId: string;
+      vehicleId?: string;
+      licenseNumber?: string;
+    },
+  ): Promise<TransportDriver> {
+    const driver = this.driversRepo.create({ companyId, ...data });
     return this.driversRepo.save(driver);
   }
 
-  async findAll(): Promise<TransportDriver[]> {
+  async findAll(companyId: string | null): Promise<TransportDriver[]> {
+    const where = companyId ? { companyId } : {};
     return this.driversRepo.find({
+      where,
       relations: { vehicle: true, user: true },
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findOne(id: string): Promise<TransportDriver> {
+  async findOne(id: string, companyId?: string | null): Promise<TransportDriver> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
     const driver = await this.driversRepo.findOne({
-      where: { id },
+      where,
       relations: { vehicle: true, user: true },
     });
     if (!driver) throw new NotFoundException('Driver not found');
@@ -42,8 +49,8 @@ export class TransportDriversService {
     });
   }
 
-  async setAvailability(id: string, isAvailable: boolean): Promise<TransportDriver> {
-    const driver = await this.findOne(id);
+  async setAvailability(id: string, isAvailable: boolean, companyId?: string | null): Promise<TransportDriver> {
+    const driver = await this.findOne(id, companyId);
     driver.isAvailable = isAvailable;
     return this.driversRepo.save(driver);
   }

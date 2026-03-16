@@ -4,14 +4,24 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Company } from '../../companies/entities/company.entity';
 
 @Entity('rooms')
 export class Room {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'room_number', unique: true })
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
+
+  @Column({ name: 'room_number' })
   roomNumber: string;
 
   @Column({ nullable: true })

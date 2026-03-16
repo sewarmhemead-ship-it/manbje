@@ -17,6 +17,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
+import { requireCompanyId } from '../common/company-id';
 
 @Controller('exercises')
 @UseGuards(JwtAuthGuard)
@@ -26,29 +27,33 @@ export class ExercisesController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.DOCTOR)
-  createExercise(@Body() dto: CreateExerciseDto) {
-    return this.exercisesService.createExercise(dto);
+  createExercise(@CurrentUser() user: User, @Body() dto: CreateExerciseDto) {
+    const companyId = requireCompanyId(user);
+    return this.exercisesService.createExercise(dto, companyId);
   }
 
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT)
-  findAllExercises() {
-    return this.exercisesService.findAllExercises();
+  findAllExercises(@CurrentUser() user: User) {
+    const companyId = user.role !== UserRole.PATIENT ? requireCompanyId(user) : null;
+    return this.exercisesService.findAllExercises(companyId);
   }
 
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT)
-  findOneExercise(@Param('id', ParseUUIDPipe) id: string) {
-    return this.exercisesService.findOneExercise(id);
+  findOneExercise(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    const companyId = user.role !== UserRole.PATIENT ? requireCompanyId(user) : null;
+    return this.exercisesService.findOneExercise(id, companyId);
   }
 
   @Post('assign')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.DOCTOR)
-  assignToPatient(@Body() dto: CreatePatientExerciseDto, @CurrentUser() user: User) {
-    return this.exercisesService.assignToPatient(dto, user.id);
+  assignToPatient(@CurrentUser() user: User, @Body() dto: CreatePatientExerciseDto) {
+    const companyId = requireCompanyId(user);
+    return this.exercisesService.assignToPatient(dto, user.id, companyId);
   }
 }
 

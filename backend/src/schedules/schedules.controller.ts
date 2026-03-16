@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { requireCompanyId } from '../common/company-id';
 import { User, UserRole } from '../users/entities/user.entity';
 
 @Controller('schedules')
@@ -29,7 +30,7 @@ export class SchedulesController {
     if (user.role === UserRole.DOCTOR && dto.doctorId !== user.id) {
       throw new ForbiddenException('You can only create schedules for yourself');
     }
-    return this.schedulesService.create(dto);
+    return this.schedulesService.create(dto, requireCompanyId(user));
   }
 
   @Get('doctor/:doctorId')
@@ -42,13 +43,14 @@ export class SchedulesController {
     if (user.role === UserRole.DOCTOR && doctorId !== user.id) {
       throw new ForbiddenException('You can only view your own schedule');
     }
-    return this.schedulesService.findByDoctor(doctorId);
+    const companyId = requireCompanyId(user);
+    return this.schedulesService.findByDoctor(doctorId, companyId);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.DOCTOR)
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.schedulesService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
+    return this.schedulesService.remove(id, requireCompanyId(user));
   }
 }

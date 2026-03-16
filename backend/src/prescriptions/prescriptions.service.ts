@@ -17,26 +17,28 @@ export class PrescriptionsService {
     private drugRepo: Repository<Drug>,
   ) {}
 
-  async generateRxNumber(): Promise<string> {
+  async generateRxNumber(companyId: string): Promise<string> {
     const year = new Date().getFullYear();
     const prefix = `RX-${year}-`;
-    const last = await this.rxRepo
+    const qb = this.rxRepo
       .createQueryBuilder('p')
       .where('p.rx_number LIKE :prefix', { prefix: prefix + '%' })
-      .orderBy('p.rx_number', 'DESC')
-      .getOne();
+      .orderBy('p.rx_number', 'DESC');
+    if (companyId) qb.andWhere('p.company_id = :companyId', { companyId });
+    const last = await qb.getOne();
     const nextNum = last
       ? parseInt(last.rxNumber.replace(prefix, ''), 10) + 1
       : 1;
     return prefix + String(nextNum).padStart(4, '0');
   }
 
-  async create(dto: CreatePrescriptionDto, doctorId: string): Promise<Prescription> {
-    const rxNumber = await this.generateRxNumber();
+  async create(dto: CreatePrescriptionDto, doctorId: string, companyId: string): Promise<Prescription> {
+    const rxNumber = await this.generateRxNumber(companyId);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
     const prescription = this.rxRepo.create({
+      companyId,
       rxNumber,
       patientId: dto.patientId,
       doctorId,
@@ -67,6 +69,7 @@ export class PrescriptionsService {
   }
 
   async findAll(filters: {
+    companyId?: string | null;
     patientId?: string;
     doctorId?: string;
     status?: string;
@@ -83,6 +86,7 @@ export class PrescriptionsService {
       .leftJoinAndSelect('items.drug', 'drug')
       .orderBy('p.created_at', 'DESC');
 
+    if (filters.companyId) qb.andWhere('p.company_id = :companyId', { companyId: filters.companyId });
     if (filters.patientId) qb.andWhere('p.patient_id = :patientId', { patientId: filters.patientId });
     if (filters.doctorId) qb.andWhere('p.doctor_id = :doctorId', { doctorId: filters.doctorId });
     if (filters.status) qb.andWhere('p.status = :status', { status: filters.status });
@@ -93,22 +97,24 @@ export class PrescriptionsService {
     return qb.getMany();
   }
 
-  async findOne(id: string): Promise<Prescription> {
+  async findOne(id: string, companyId?: string | null): Promise<Prescription> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
     const p = await this.rxRepo.findOne({
-      where: { id },
+      where,
       relations: { patient: { user: true }, doctor: true, appointment: true, items: { drug: true } },
     });
     if (!p) throw new NotFoundException('Prescription not found');
     return p;
   }
 
-  async updateStatus(id: string, status: PrescriptionStatus): Promise<Prescription> {
-    const p = await this.findOne(id);
+  async updateStatus(id: string, status: PrescriptionStatus, companyId?: string | null): Promise<Prescription> {
+    const p = await this.findOne(id, companyId);
     p.status = status;
     return this.rxRepo.save(p);
   }
 
-  async getStats(): Promise<{
+  async getStats(companyId?: string | null): Promise<{
     totalThisMonth: number;
     activePrescriptions: number;
     mostPrescribedDrug: string;
@@ -118,9 +124,15 @@ export class PrescriptionsService {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
+    const qbMonth = this.rxRepo.createQueryBuilder('p').where('p.created_at >= :start', { start: monthStart }).andWhere('p.created_at <= :end', { end: monthEnd });
+    const qbActive = this.rxRepo.createQueryBuilder('p').where('p.status = :status', { status: PrescriptionStatus.ACTIVE });
+    if (companyId) {
+      qbMonth.andWhere('p.company_id = :companyId', { companyId });
+      qbActive.andWhere('p.company_id = :companyId', { companyId });
+    }
     const [totalThisMonth, activePrescriptions, allItems] = await Promise.all([
-      this.rxRepo.createQueryBuilder('p').where('p.created_at >= :start', { start: monthStart }).andWhere('p.created_at <= :end', { end: monthEnd }).getCount(),
-      this.rxRepo.count({ where: { status: PrescriptionStatus.ACTIVE } }),
+      qbMonth.getCount(),
+      qbActive.getCount(),
       this.itemRepo.find({ relations: { drug: true } }),
     ]);
 

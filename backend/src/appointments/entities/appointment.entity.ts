@@ -11,6 +11,7 @@ import { User } from '../../users/entities/user.entity';
 import { Patient } from '../../patients/entities/patient.entity';
 import { Room } from '../../rooms/entities/room.entity';
 import { Equipment } from '../../equipment/entities/equipment.entity';
+import { Company } from '../../companies/entities/company.entity';
 
 export enum AppointmentStatus {
   SCHEDULED = 'scheduled',
@@ -29,6 +30,13 @@ export enum ArrivalType {
 export class Appointment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 
   @Column({ name: 'doctor_id', type: 'uuid' })
   doctorId: string;

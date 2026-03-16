@@ -1,0 +1,55 @@
+{
+  "common": {
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "language": "اللغة"
+  },
+  "login": {
+    "title": "مركز العلاج الفيزيائي",
+    "phone": "رقم الجوال",
+    "password": "كلمة المرور",
+    "submit": "تسجيل الدخول",
+    "forgotPassword": "نسيت كلمة المرور؟",
+    "errorRequired": "أدخل رقم الجوال وكلمة المرور",
+    "errorFailed": "فشل تسجيل الدخول"
+  },
+  "tabs": {
+    "home": "الرئيسية",
+    "exercises": "تماريني",
+    "appointments": "مواعيدي",
+    "prescriptions": "وصفاتي",
+    "notifications": "إشعارات",
+    "profile": "حسابي"
+  },
+  "home": {
+    "welcome": "مرحباً",
+    "nextAppointment": "موعدك القادم",
+    "noUpcoming": "لا يوجد موعد قادم",
+    "todayExercises": "تمارين اليوم",
+    "done": "منجزة",
+    "recentNotification": "آخر إشعار",
+    "completedSessions": "جلسات مكتملة"
+  },
+  "exercises": {
+    "title": "تماريني",
+    "todayProgress": "تقدمك اليوم",
+    "noExercises": "لا توجد تمارين معينة"
+  },
+  "appointments": {
+    "title": "مواعيدي",
+    "upcoming": "القادمة",
+    "past": "السابقة",
+    "noAppointments": "لا توجد مواعيد"
+  },
+  "prescriptions": {
+    "title": "وصفاتي",
+    "noPrescriptions": "لا توجد وصفات"
+  },
+  "profile": {
+    "title": "حسابي",
+    "logout": "تسجيل الخروج",
+    "language": "اللغة"
+  }
+}

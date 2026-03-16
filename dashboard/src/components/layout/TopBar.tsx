@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, LogOut, Loader2, Bell, Menu } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiGet, apiPatch } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -103,6 +104,7 @@ export function TopBar({ onMenuClick }: { onMenuClick?: () => void } = {}) {
         />
       </div>
       <div className="flex items-center gap-3">
+        <LanguageSwitcher className="hidden sm:flex" />
         {user && (
           <div className="relative">
             <Button

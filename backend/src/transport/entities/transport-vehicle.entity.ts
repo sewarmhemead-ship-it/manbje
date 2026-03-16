@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Company } from '../../companies/entities/company.entity';
 
 export enum VehicleAccommodationType {
   WHEELCHAIR = 'wheelchair',
@@ -18,7 +21,14 @@ export class TransportVehicle {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'plate_number', unique: true })
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
+
+  @Column({ name: 'plate_number' })
   plateNumber: string;
 
   @Column({ name: 'vehicle_type', nullable: true })

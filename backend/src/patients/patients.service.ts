@@ -12,8 +12,9 @@ export class PatientsService {
     private patientsRepo: Repository<Patient>,
   ) {}
 
-  async create(dto: CreatePatientDto): Promise<Patient> {
+  async create(dto: CreatePatientDto, companyId: string): Promise<Patient> {
     const patient = this.patientsRepo.create({
+      companyId,
       userId: dto.userId ?? undefined,
       nameAr: dto.nameAr,
       nameEn: dto.nameEn ?? null,
@@ -35,8 +36,10 @@ export class PatientsService {
     return this.patientsRepo.save(patient);
   }
 
-  async findAll(): Promise<Patient[]> {
+  async findAll(companyId?: string | null): Promise<Patient[]> {
+    const where = companyId ? { companyId } : {};
     return this.patientsRepo.find({
+      where,
       relations: { user: true, assignedDoctor: true },
       order: { createdAt: 'DESC' },
     });
@@ -46,6 +49,7 @@ export class PatientsService {
     search?: string;
     page?: number;
     limit?: number;
+    companyId?: string | null;
   }): Promise<{ data: Patient[]; total: number }> {
     const page = Math.max(1, options.page ?? 1);
     const limit = Math.min(100, Math.max(1, options.limit ?? 12));
@@ -57,6 +61,9 @@ export class PatientsService {
       .leftJoinAndSelect('p.assignedDoctor', 'assignedDoctor')
       .orderBy('p.created_at', 'DESC');
 
+    if (options.companyId) {
+      qb.andWhere('p.company_id = :companyId', { companyId: options.companyId });
+    }
     if (options.search?.trim()) {
       const term = `%${options.search.trim()}%`;
       qb.andWhere(
@@ -69,26 +76,33 @@ export class PatientsService {
     return { data, total };
   }
 
-  async getStats(): Promise<{ total: number; activeThisMonth: number; newThisWeek: number }> {
+  async getStats(companyId?: string | null): Promise<{ total: number; activeThisMonth: number; newThisWeek: number }> {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const total = await this.patientsRepo.count();
-    const newThisWeek = await this.patientsRepo
-      .createQueryBuilder('p')
-      .where('p.created_at >= :weekAgo', { weekAgo })
-      .getCount();
+
+    const baseQb = () => {
+      const q = this.patientsRepo.createQueryBuilder('p');
+      if (companyId) q.where('p.company_id = :companyId', { companyId });
+      return q;
+    };
+    const total = await baseQb().getCount();
+    const newThisWeek = await baseQb().andWhere('p.created_at >= :weekAgo', { weekAgo }).getCount();
     const activeResult = await this.patientsRepo.manager.query(
-      `SELECT COUNT(DISTINCT patient_id) AS c FROM clinical_sessions WHERE created_at >= $1`,
-      [monthStart],
+      `SELECT COUNT(DISTINCT cs.patient_id) AS c FROM clinical_sessions cs
+       INNER JOIN appointments a ON a.id = cs.appointment_id
+       WHERE cs.created_at >= $1 ${companyId ? 'AND a.company_id = $2' : ''}`,
+      companyId ? [monthStart, companyId] : [monthStart],
     );
     const activeThisMonth = parseInt(activeResult?.[0]?.c ?? '0', 10);
     return { total, activeThisMonth, newThisWeek };
   }
 
-  async findOne(id: string): Promise<Patient> {
+  async findOne(id: string, companyId?: string | null): Promise<Patient> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
     const patient = await this.patientsRepo.findOne({
-      where: { id },
+      where,
       relations: { user: true, assignedDoctor: true },
     });
     if (!patient) throw new NotFoundException('Patient not found');

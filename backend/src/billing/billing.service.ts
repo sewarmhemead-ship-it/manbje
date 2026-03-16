@@ -26,14 +26,15 @@ export class BillingService {
     private notificationsService: NotificationsService,
   ) {}
 
-  private async nextInvoiceNumber(): Promise<string> {
+  private async nextInvoiceNumber(companyId?: string | null): Promise<string> {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const prefix = `INV-${today}-`;
-    const last = await this.invoiceRepo
+    const qb = this.invoiceRepo
       .createQueryBuilder('i')
       .where('i.invoice_number LIKE :prefix', { prefix: `${prefix}%` })
-      .orderBy('i.invoice_number', 'DESC')
-      .getOne();
+      .orderBy('i.invoice_number', 'DESC');
+    if (companyId) qb.andWhere('i.company_id = :companyId', { companyId });
+    const last = await qb.getOne();
     const next = last
       ? parseInt(last.invoiceNumber.slice(-3), 10) + 1
       : 1;
@@ -48,17 +49,21 @@ export class BillingService {
     return { subtotal, total };
   }
 
-  async create(dto: CreateInvoiceDto): Promise<Invoice> {
+  async create(dto: CreateInvoiceDto, companyId: string): Promise<Invoice> {
     const patient = await this.patientRepo.findOne({ where: { id: dto.patientId } });
     if (!patient) throw new NotFoundException('Patient not found');
+    if (patient.companyId && companyId && patient.companyId !== companyId) {
+      throw new NotFoundException('Patient not found');
+    }
 
-    const invoiceNumber = await this.nextInvoiceNumber();
+    const invoiceNumber = await this.nextInvoiceNumber(companyId);
     const dueDate = dto.dueDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const discount = dto.discount ?? 0;
     const tax = dto.tax ?? 0;
     const insuranceCoverage = dto.insuranceCoverage ?? 0;
 
     const invoice = this.invoiceRepo.create({
+      companyId,
       invoiceNumber,
       patientId: dto.patientId,
       appointmentId: dto.appointmentId ?? null,
@@ -79,7 +84,7 @@ export class BillingService {
     return this.invoiceRepo.save(invoice);
   }
 
-  async createForCompletedAppointment(params: {
+  async createForCompletedAppointment(companyId: string, params: {
     patientId: string;
     appointmentId: string;
     sessionAmount: number;
@@ -93,7 +98,7 @@ export class BillingService {
       dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       status: InvoiceStatus.SENT,
       insuranceProvider: params.insuranceProvider ?? undefined,
-    });
+    }, companyId);
 
     await this.addItem(invoice.id, {
       description: 'جلسة علاج طبيعي',
@@ -112,12 +117,13 @@ export class BillingService {
     return this.findOne(invoice.id);
   }
 
-  async findAll(filters?: { status?: InvoiceStatus; patientId?: string; startDate?: string; endDate?: string }): Promise<Invoice[]> {
+  async findAll(filters?: { companyId?: string | null; status?: InvoiceStatus; patientId?: string; startDate?: string; endDate?: string }): Promise<Invoice[]> {
     const qb = this.invoiceRepo
       .createQueryBuilder('i')
       .leftJoinAndSelect('i.patient', 'p')
       .orderBy('i.created_at', 'DESC');
 
+    if (filters?.companyId) qb.andWhere('i.company_id = :companyId', { companyId: filters.companyId });
     if (filters?.status) qb.andWhere('i.status = :status', { status: filters.status });
     if (filters?.patientId) qb.andWhere('i.patient_id = :patientId', { patientId: filters.patientId });
     if (filters?.startDate)
@@ -130,17 +136,19 @@ export class BillingService {
     return qb.getMany();
   }
 
-  async findOne(id: string): Promise<Invoice> {
+  async findOne(id: string, companyId?: string | null): Promise<Invoice> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
     const invoice = await this.invoiceRepo.findOne({
-      where: { id },
+      where,
       relations: { patient: true, items: true, payments: true, appointment: true },
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     return invoice;
   }
 
-  async update(id: string, dto: UpdateInvoiceDto): Promise<Invoice> {
-    const invoice = await this.findOne(id);
+  async update(id: string, dto: UpdateInvoiceDto, companyId?: string | null): Promise<Invoice> {
+    const invoice = await this.findOne(id, companyId);
     if (dto.status !== undefined) invoice.status = dto.status;
     if (dto.discount !== undefined) invoice.discount = String(dto.discount);
     if (dto.notes !== undefined) invoice.notes = dto.notes;
@@ -153,14 +161,14 @@ export class BillingService {
     return this.invoiceRepo.save(invoice);
   }
 
-  async softDelete(id: string): Promise<void> {
-    const invoice = await this.findOne(id);
+  async softDelete(id: string, companyId?: string | null): Promise<void> {
+    const invoice = await this.findOne(id, companyId);
     invoice.status = InvoiceStatus.CANCELLED;
     await this.invoiceRepo.save(invoice);
   }
 
-  async addItem(invoiceId: string, dto: AddInvoiceItemDto): Promise<InvoiceItem> {
-    const invoice = await this.findOne(invoiceId);
+  async addItem(invoiceId: string, dto: AddInvoiceItemDto, companyId?: string | null): Promise<InvoiceItem> {
+    const invoice = await this.findOne(invoiceId, companyId);
     const total = dto.quantity * dto.unitPrice;
     const item = this.itemRepo.create({
       invoiceId,
@@ -181,8 +189,8 @@ export class BillingService {
     return saved;
   }
 
-  async removeItem(invoiceId: string, itemId: string): Promise<void> {
-    const invoice = await this.findOne(invoiceId);
+  async removeItem(invoiceId: string, itemId: string, companyId?: string | null): Promise<void> {
+    const invoice = await this.findOne(invoiceId, companyId);
     const item = await this.itemRepo.findOne({ where: { id: itemId, invoiceId } });
     if (!item) throw new NotFoundException('Invoice item not found');
     await this.itemRepo.remove(item);
@@ -195,8 +203,8 @@ export class BillingService {
     await this.invoiceRepo.save(invoice);
   }
 
-  async addPayment(invoiceId: string, dto: CreatePaymentDto): Promise<Payment> {
-    const invoice = await this.findOne(invoiceId);
+  async addPayment(invoiceId: string, dto: CreatePaymentDto, companyId?: string | null): Promise<Payment> {
+    const invoice = await this.findOne(invoiceId, companyId);
     const payment = this.paymentRepo.create({
       invoiceId,
       amount: String(dto.amount),
@@ -229,6 +237,7 @@ export class BillingService {
           'استلام دفعة',
           `تم استلام دفعة بقيمة ${dto.amount}`,
           { invoiceId },
+          invoice.companyId ?? undefined,
         );
       }
     } catch {
@@ -237,12 +246,12 @@ export class BillingService {
     return saved;
   }
 
-  async getPayments(invoiceId: string): Promise<Payment[]> {
-    await this.findOne(invoiceId);
+  async getPayments(invoiceId: string, companyId?: string | null): Promise<Payment[]> {
+    await this.findOne(invoiceId, companyId);
     return this.paymentRepo.find({ where: { invoiceId }, order: { createdAt: 'DESC' } });
   }
 
-  async getStats(startDate?: string, endDate?: string): Promise<{
+  async getStats(companyId?: string | null, startDate?: string, endDate?: string): Promise<{
     totalRevenue: number;
     totalPaid: number;
     totalPending: number;
@@ -250,6 +259,7 @@ export class BillingService {
     byMethod: { method: string; amount: number }[];
   }> {
     const qb = this.invoiceRepo.createQueryBuilder('i').where('i.status != :cancelled', { cancelled: InvoiceStatus.CANCELLED });
+    if (companyId) qb.andWhere('i.company_id = :companyId', { companyId });
     if (startDate) qb.andWhere('i.created_at >= :start', { start: new Date(startDate) });
     if (endDate) {
       const end = new Date(endDate);
@@ -279,14 +289,15 @@ export class BillingService {
     };
   }
 
-  async getRevenueForDateRange(startDate: string, endDate: string): Promise<number> {
-    const result = await this.invoiceRepo
+  async getRevenueForDateRange(startDate: string, endDate: string, companyId?: string | null): Promise<number> {
+    const qb = this.invoiceRepo
       .createQueryBuilder('i')
       .select('COALESCE(SUM(i.total), 0)', 'sum')
       .where('i.status != :cancelled', { cancelled: InvoiceStatus.CANCELLED })
       .andWhere('i.created_at >= :start', { start: new Date(startDate) })
-      .andWhere('i.created_at <= :end', { end: new Date(endDate) })
-      .getRawOne<{ sum: string }>();
+      .andWhere('i.created_at <= :end', { end: new Date(endDate) });
+    if (companyId) qb.andWhere('i.company_id = :companyId', { companyId });
+    const result = await qb.getRawOne<{ sum: string }>();
     return parseFloat(result?.sum ?? '0');
   }
 }

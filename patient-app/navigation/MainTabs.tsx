@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { C } from '../constants/theme';
 import { HomeScreen } from '../screens/HomeScreen';
 import { AppointmentsScreen } from '../screens/AppointmentsScreen';
@@ -22,6 +23,7 @@ const ProfileStack = createStackNavigator();
 const READ_IDS_KEY = 'patient_notifications_read';
 
 function AppointmentsStackScreen() {
+  const { t } = useTranslation();
   return (
     <AppointmentsStack.Navigator
       screenOptions={{
@@ -32,13 +34,14 @@ function AppointmentsStackScreen() {
         gestureDirection: 'horizontal-inverted',
       }}
     >
-      <AppointmentsStack.Screen name="AppointmentsList" component={AppointmentsScreen} options={{ title: 'مواعيدي' }} />
-      <AppointmentsStack.Screen name="AppointmentDetail" component={AppointmentDetailScreen} options={{ title: 'تفاصيل الموعد' }} />
+      <AppointmentsStack.Screen name="AppointmentsList" component={AppointmentsScreen} options={{ title: t('tabs.appointments') }} />
+      <AppointmentsStack.Screen name="AppointmentDetail" component={AppointmentDetailScreen} options={{ title: t('appointments.title') }} />
     </AppointmentsStack.Navigator>
   );
 }
 
 function ProfileStackScreen() {
+  const { t } = useTranslation();
   return (
     <ProfileStack.Navigator
       screenOptions={{
@@ -49,15 +52,16 @@ function ProfileStackScreen() {
         gestureDirection: 'horizontal-inverted',
       }}
     >
-      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} options={{ title: 'ملفي' }} />
-      <ProfileStack.Screen name="Progress" component={ProgressScreen} options={{ title: 'تقدمي' }} />
-      <ProfileStack.Screen name="Prescriptions" component={PrescriptionsScreen} options={{ title: 'وصفاتي الطبية' }} />
-      <ProfileStack.Screen name="PrescriptionDetail" component={PrescriptionDetailScreen} options={{ title: 'تفاصيل الوصفة' }} />
+      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} options={{ title: t('tabs.profile') }} />
+      <ProfileStack.Screen name="Progress" component={ProgressScreen} options={{ title: t('profile.title') }} />
+      <ProfileStack.Screen name="Prescriptions" component={PrescriptionsScreen} options={{ title: t('tabs.prescriptions') }} />
+      <ProfileStack.Screen name="PrescriptionDetail" component={PrescriptionDetailScreen} options={{ title: t('prescriptions.title') }} />
     </ProfileStack.Navigator>
   );
 }
 
 export function MainTabs() {
+  const { t } = useTranslation();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -95,8 +99,8 @@ export function MainTabs() {
         name="Home"
         component={HomeScreen}
         options={{
-          title: 'الرئيسية',
-          tabBarLabel: 'الرئيسية',
+          title: t('tabs.home'),
+          tabBarLabel: t('tabs.home'),
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>🏠</Text>,
         }}
       />
@@ -104,8 +108,8 @@ export function MainTabs() {
         name="Appointments"
         component={AppointmentsStackScreen}
         options={{
-          title: 'مواعيدي',
-          tabBarLabel: 'مواعيدي',
+          title: t('tabs.appointments'),
+          tabBarLabel: t('tabs.appointments'),
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>📅</Text>,
           headerShown: false,
         }}
@@ -114,8 +118,8 @@ export function MainTabs() {
         name="Exercises"
         component={ExercisesScreen}
         options={{
-          title: 'تماريني',
-          tabBarLabel: 'تماريني',
+          title: t('tabs.exercises'),
+          tabBarLabel: t('tabs.exercises'),
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>💪</Text>,
         }}
       />
@@ -123,8 +127,8 @@ export function MainTabs() {
         name="Notifications"
         component={NotificationsScreen}
         options={{
-          title: 'الإشعارات',
-          tabBarLabel: 'إشعارات',
+          title: t('tabs.notifications'),
+          tabBarLabel: t('tabs.notifications'),
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>🔔</Text>,
           tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
@@ -133,8 +137,8 @@ export function MainTabs() {
         name="Profile"
         component={ProfileStackScreen}
         options={{
-          title: 'ملفي',
-          tabBarLabel: 'ملفي',
+          title: t('tabs.profile'),
+          tabBarLabel: t('tabs.profile'),
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 22 }}>👤</Text>,
           headerShown: false,
         }}

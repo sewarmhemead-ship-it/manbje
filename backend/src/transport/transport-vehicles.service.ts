@@ -10,22 +10,28 @@ export class TransportVehiclesService {
     private vehiclesRepo: Repository<TransportVehicle>,
   ) {}
 
-  async create(data: {
-    plateNumber: string;
-    vehicleType?: string;
-    accommodationType?: TransportVehicle['accommodationType'];
-    capacity?: number;
-  }): Promise<TransportVehicle> {
-    const vehicle = this.vehiclesRepo.create(data);
+  async create(
+    companyId: string,
+    data: {
+      plateNumber: string;
+      vehicleType?: string;
+      accommodationType?: TransportVehicle['accommodationType'];
+      capacity?: number;
+    },
+  ): Promise<TransportVehicle> {
+    const vehicle = this.vehiclesRepo.create({ companyId, ...data });
     return this.vehiclesRepo.save(vehicle);
   }
 
-  async findAll(): Promise<TransportVehicle[]> {
-    return this.vehiclesRepo.find({ order: { plateNumber: 'ASC' } });
+  async findAll(companyId: string | null): Promise<TransportVehicle[]> {
+    const where = companyId ? { companyId } : {};
+    return this.vehiclesRepo.find({ where, order: { plateNumber: 'ASC' } });
   }
 
-  async findOne(id: string): Promise<TransportVehicle> {
-    const vehicle = await this.vehiclesRepo.findOne({ where: { id } });
+  async findOne(id: string, companyId?: string | null): Promise<TransportVehicle> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
+    const vehicle = await this.vehiclesRepo.findOne({ where });
     if (!vehicle) throw new NotFoundException('Vehicle not found');
     return vehicle;
   }
@@ -33,8 +39,9 @@ export class TransportVehiclesService {
   async update(
     id: string,
     data: Partial<Pick<TransportVehicle, 'status' | 'accommodationType' | 'capacity'>>,
+    companyId?: string | null,
   ): Promise<TransportVehicle> {
-    const vehicle = await this.findOne(id);
+    const vehicle = await this.findOne(id, companyId);
     Object.assign(vehicle, data);
     return this.vehiclesRepo.save(vehicle);
   }

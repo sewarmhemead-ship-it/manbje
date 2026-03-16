@@ -9,12 +9,15 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, radius } from '../constants/theme';
+import { setLanguage, SUPPORTED_LANGUAGES } from '../lib/i18n';
 
 type Props = { login: (phone: string, password: string) => Promise<void>; onSuccess: () => void };
 
 export function LoginScreen({ login, onSuccess }: Props) {
+  const { t, i18n } = useTranslation();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -23,7 +26,7 @@ export function LoginScreen({ login, onSuccess }: Props) {
   const handleLogin = async () => {
     setError('');
     if (!phone.trim() || !password) {
-      setError('أدخل رقم الجوال وكلمة المرور');
+      setError(t('login.errorRequired'));
       return;
     }
     setLoading(true);
@@ -31,12 +34,14 @@ export function LoginScreen({ login, onSuccess }: Props) {
       await login(phone.trim(), password);
       onSuccess();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'فشل تسجيل الدخول';
+      const msg = e instanceof Error ? e.message : t('login.errorFailed');
       setError(msg);
     } finally {
       setLoading(false);
     }
   };
+
+  const currentLang = i18n.language?.startsWith('ar') ? 'ar' : 'en';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -44,13 +49,26 @@ export function LoginScreen({ login, onSuccess }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.inner}
       >
+        <View style={styles.langRow}>
+          {SUPPORTED_LANGUAGES.map((lng) => (
+            <TouchableOpacity
+              key={lng}
+              onPress={() => setLanguage(lng)}
+              style={[styles.langBtn, currentLang === lng && styles.langBtnActive]}
+            >
+              <Text style={[styles.langBtnText, currentLang === lng && styles.langBtnTextActive]}>
+                {lng === 'ar' ? 'ع' : 'EN'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <View style={styles.header}>
           <Text style={styles.logo}>🏥</Text>
-          <Text style={styles.title}>مركز العلاج الفيزيائي</Text>
+          <Text style={styles.title}>{t('login.title')}</Text>
         </View>
         <View style={styles.form}>
           <TextInput
-            placeholder="رقم الجوال"
+            placeholder={t('login.phone')}
             placeholderTextColor={C.muted}
             value={phone}
             onChangeText={setPhone}
@@ -59,7 +77,7 @@ export function LoginScreen({ login, onSuccess }: Props) {
             style={styles.input}
           />
           <TextInput
-            placeholder="كلمة المرور"
+            placeholder={t('login.password')}
             placeholderTextColor={C.muted}
             value={password}
             onChangeText={setPassword}
@@ -75,14 +93,14 @@ export function LoginScreen({ login, onSuccess }: Props) {
             {loading ? (
               <ActivityIndicator color={C.bg} />
             ) : (
-              <Text style={styles.btnText}>تسجيل الدخول</Text>
+              <Text style={styles.btnText}>{t('login.submit')}</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {}}
             style={styles.forgot}
           >
-            <Text style={styles.forgotText}>نسيت كلمة المرور؟</Text>
+            <Text style={styles.forgotText}>{t('login.forgotPassword')}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -93,6 +111,11 @@ export function LoginScreen({ login, onSuccess }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  langRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 16 },
+  langBtn: { marginLeft: 8, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, backgroundColor: C.s1 },
+  langBtnActive: { backgroundColor: C.cyan },
+  langBtnText: { color: C.muted, fontWeight: '600' },
+  langBtnTextActive: { color: C.bg },
   header: { alignItems: 'center', marginBottom: 40 },
   logo: { fontSize: 56, marginBottom: 12 },
   title: { fontSize: 22, fontWeight: '700', color: C.text, textAlign: 'right' },

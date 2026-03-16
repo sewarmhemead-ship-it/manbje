@@ -21,7 +21,9 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { requireCompanyId } from '../common/company-id';
 import { User, UserRole } from '../users/entities/user.entity';
+import { AuditService } from '../audit/audit.service';
 
 @Controller('patients')
 @UseGuards(JwtAuthGuard)
@@ -30,38 +32,53 @@ export class PatientsController {
     private patientsService: PatientsService,
     private clinicalSessionsService: ClinicalSessionsService,
     private exercisesService: ExercisesService,
+    private auditService: AuditService,
   ) {}
 
   @Post()
   @UseGuards(PermissionsGuard)
   @RequirePermission('patients_create')
-  create(@Body() dto: CreatePatientDto) {
-    return this.patientsService.create(dto);
+  async create(@Body() dto: CreatePatientDto, @CurrentUser() user: User) {
+    const companyId = requireCompanyId(user);
+    const patient = await this.patientsService.create(dto, companyId);
+    await this.auditService.log({
+      userId: user.id,
+      companyId,
+      action: 'create',
+      entityType: 'patient',
+      entityId: patient.id,
+      details: { nameAr: dto.nameAr },
+    });
+    return patient;
   }
 
   @Get()
   @UseGuards(PermissionsGuard)
   @RequirePermission('patients_view')
   findAll(
+    @CurrentUser() user: User,
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    const companyId = user.role !== UserRole.PATIENT ? requireCompanyId(user) : null;
     if (search !== undefined || page !== undefined || limit !== undefined) {
       return this.patientsService.findWithSearch({
         search,
         page: page ? parseInt(page, 10) : undefined,
         limit: limit ? parseInt(limit, 10) : undefined,
+        companyId,
       });
     }
-    return this.patientsService.findAll();
+    return this.patientsService.findAll(companyId ?? undefined);
   }
 
   @Get('stats')
   @UseGuards(PermissionsGuard)
   @RequirePermission('patients_view')
-  getStats() {
-    return this.patientsService.getStats();
+  getStats(@CurrentUser() user: User) {
+    const companyId = user.role !== UserRole.PATIENT ? requireCompanyId(user) : null;
+    return this.patientsService.getStats(companyId ?? undefined);
   }
 
   @Get('me')
@@ -123,8 +140,9 @@ export class PatientsController {
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.DOCTOR)
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.patientsService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
+    const companyId = requireCompanyId(user);
+    return this.patientsService.findOne(id, companyId);
   }
 
   @Patch(':id/push-token')
@@ -145,10 +163,22 @@ export class PatientsController {
   @Patch(':id')
   @UseGuards(PermissionsGuard)
   @RequirePermission('patients_edit')
-  update(
+  async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePatientDto,
+    @CurrentUser() user: User,
   ) {
-    return this.patientsService.update(id, dto);
+    const companyId = requireCompanyId(user);
+    await this.patientsService.findOne(id, companyId);
+    const patient = await this.patientsService.update(id, dto);
+    await this.auditService.log({
+      userId: user.id,
+      companyId,
+      action: 'update',
+      entityType: 'patient',
+      entityId: id,
+      details: Object.keys(dto).length ? { updatedFields: Object.keys(dto) } : null,
+    });
+    return patient;
   }
 }

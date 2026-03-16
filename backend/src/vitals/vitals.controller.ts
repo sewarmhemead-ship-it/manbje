@@ -19,6 +19,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User, UserRole } from '../users/entities/user.entity';
 import { PatientsService } from '../patients/patients.service';
+import { requireCompanyId } from '../common/company-id';
 
 @Controller('vitals')
 @UseGuards(JwtAuthGuard)
@@ -48,10 +49,13 @@ export class VitalsController {
   @Get(':patientId')
   @UseGuards(PermissionsGuard)
   @RequirePermission('vitals_view')
-  findByPatient(
+  async findByPatient(
+    @CurrentUser() user: User,
     @Param('patientId', ParseUUIDPipe) patientId: string,
     @Query('limit') limit?: string,
   ) {
+    const companyId = requireCompanyId(user);
+    await this.patientsService.findOne(patientId, companyId);
     const lim = limit ? parseInt(limit, 10) : 10;
     return this.vitalsService.findByPatient(patientId, lim);
   }
@@ -59,7 +63,12 @@ export class VitalsController {
   @Get(':patientId/latest')
   @UseGuards(PermissionsGuard)
   @RequirePermission('vitals_view')
-  findLatest(@Param('patientId', ParseUUIDPipe) patientId: string) {
+  async findLatest(
+    @CurrentUser() user: User,
+    @Param('patientId', ParseUUIDPipe) patientId: string,
+  ) {
+    const companyId = requireCompanyId(user);
+    await this.patientsService.findOne(patientId, companyId);
     return this.vitalsService.findLatest(patientId);
   }
 }

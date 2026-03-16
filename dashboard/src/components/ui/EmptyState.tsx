@@ -38,3 +38,36 @@ export function EmptyState({ icon, title, subtitle, action }: EmptyStateProps) {
     </div>
   );
 }
+
+interface ErrorStateProps {
+  title: string;
+  onRetry: () => void;
+  retryLabel?: string;
+}
+
+export function ErrorState({ title, onRetry, retryLabel = 'Retry' }: ErrorStateProps) {
+  return (
+    <div
+      className="rounded-2xl border p-10 text-center"
+      style={{
+        background: '#0b0f1a',
+        borderColor: 'rgba(248,113,113,0.3)',
+      }}
+    >
+      <span className="text-[32px] opacity-80" aria-hidden>
+        ⚠️
+      </span>
+      <p className="mt-3 text-[13px] font-bold" style={{ color: '#dde6f5' }}>
+        {title}
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 rounded-lg px-4 py-2 text-sm font-medium transition-colors hover:opacity-90"
+        style={{ background: '#22d3ee', color: '#06080e' }}
+      >
+        {retryLabel}
+      </button>
+    </div>
+  );
+}

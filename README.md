@@ -44,6 +44,9 @@ npm run dev
 cd backend
 npm run db:seed-drugs
 npm run db:seed-test
+
+# 5. ربط البيانات بالشركة (Multi-tenancy) — ضروري بعد التحديث أو لقاعدة موجودة
+npm run db:seed-company
 ```
 
 ## حسابات الاختبار
@@ -101,6 +104,16 @@ TWILIO_WHATSAPP_FROM=       # اختياري
 ```env
 VITE_API_URL=http://localhost:3000
 ```
+
+## Multi-tenancy (الشركات)
+- كل البيانات مربوطة بشركة (`company_id`). المستخدمون والمرضى والمواعيد والغرف وغيرها تُفلتر حسب شركة المستخدم الحالي.
+- **قاعدة موجودة؟** شغّل مرة واحدة: `npm run db:seed-company` (ينشئ شركة افتراضية ويربط كل الصفوف بها).
+- الطاقم (مدير، طبيب، ممرض، استقبال، سائق) يجب أن يكون لديهم `company_id` وإلا ستظهر رسالة مناسبة.
+
+## ثنائية اللغة (لوحة التحكم)
+- اللوحة تدعم **العربية** و**الإنجليزية** مع RTL/LTR تلقائي.
+- زر تبديل اللغة (ع / EN) في شاشة تسجيل الدخول وفي الـ TopBar بعد الدخول.
+- اللغة تُحفظ في `localStorage` (مفتاح: `physiocore_lang`).
 
 ## Deploy
 - Backend: Railway (railway.app)

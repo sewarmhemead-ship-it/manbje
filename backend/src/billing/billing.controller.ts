@@ -20,96 +20,136 @@ import { UpdateInvoiceDto } from './dto/update-invoice.dto';
 import { AddInvoiceItemDto } from './dto/add-invoice-item.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { InvoiceStatus } from './entities/invoice.entity';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { User } from '../users/entities/user.entity';
+import { requireCompanyId } from '../common/company-id';
+import { AuditService } from '../audit/audit.service';
 
 @Controller('billing')
 @UseGuards(JwtAuthGuard)
 export class BillingController {
-  constructor(private billingService: BillingService) {}
+  constructor(
+    private billingService: BillingService,
+    private auditService: AuditService,
+  ) {}
 
   @Post('invoices')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  create(@Body() dto: CreateInvoiceDto) {
-    return this.billingService.create(dto);
+  async create(@CurrentUser() user: User, @Body() dto: CreateInvoiceDto) {
+    const companyId = requireCompanyId(user);
+    const invoice = await this.billingService.create(dto, companyId);
+    await this.auditService.log({
+      userId: user.id,
+      companyId,
+      action: 'create',
+      entityType: 'invoice',
+      entityId: invoice.id,
+      details: { patientId: dto.patientId },
+    });
+    return invoice;
   }
 
   @Get('invoices')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   findAll(
+    @CurrentUser() user: User,
     @Query('status') status?: InvoiceStatus,
     @Query('patientId') patientId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.billingService.findAll({ status, patientId, startDate, endDate });
+    const companyId = requireCompanyId(user);
+    return this.billingService.findAll({ companyId, status, patientId, startDate, endDate });
   }
 
   @Get('invoices/:id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.billingService.findOne(id);
+  findOne(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    const companyId = requireCompanyId(user);
+    return this.billingService.findOne(id, companyId);
   }
 
   @Patch('invoices/:id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateInvoiceDto) {
-    return this.billingService.update(id, dto);
+  update(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateInvoiceDto) {
+    const companyId = requireCompanyId(user);
+    return this.billingService.update(id, dto, companyId);
   }
 
   @Delete('invoices/:id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    await this.billingService.softDelete(id);
+  async remove(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    const companyId = requireCompanyId(user);
+    await this.billingService.softDelete(id, companyId);
   }
 
   @Post('invoices/:id/items')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   addItem(
+    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AddInvoiceItemDto,
   ) {
-    return this.billingService.addItem(id, dto);
+    const companyId = requireCompanyId(user);
+    return this.billingService.addItem(id, dto, companyId);
   }
 
   @Delete('invoices/:id/items/:itemId')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   async removeItem(
+    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
   ) {
-    await this.billingService.removeItem(id, itemId);
+    const companyId = requireCompanyId(user);
+    await this.billingService.removeItem(id, itemId, companyId);
   }
 
   @Post('invoices/:id/payments')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  addPayment(
+  async addPayment(
+    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreatePaymentDto,
   ) {
-    return this.billingService.addPayment(id, dto);
+    const companyId = requireCompanyId(user);
+    const payment = await this.billingService.addPayment(id, dto, companyId);
+    await this.auditService.log({
+      userId: user.id,
+      companyId,
+      action: 'add_payment',
+      entityType: 'invoice',
+      entityId: id,
+      details: { amount: dto.amount, paymentId: payment.id },
+    });
+    return payment;
   }
 
   @Get('invoices/:id/payments')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  getPayments(@Param('id', ParseUUIDPipe) id: string) {
-    return this.billingService.getPayments(id);
+  getPayments(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    const companyId = requireCompanyId(user);
+    return this.billingService.getPayments(id, companyId);
   }
 
   @Get('stats')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   getStats(
+    @CurrentUser() user: User,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.billingService.getStats(startDate, endDate);
+    const companyId = requireCompanyId(user);
+    return this.billingService.getStats(companyId, startDate, endDate);
   }
 }

@@ -5,9 +5,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { Patient } from '../../patients/entities/patient.entity';
+import { Company } from '../../companies/entities/company.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -22,6 +25,14 @@ export enum UserRole {
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /** Multi-tenant: كل مستخدم ينتمي لشركة واحدة (مركز). nullable للتوافق مع البيانات القديمة حتى تشغيل seed. */
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 
   @Column({ unique: true })
   email: string;

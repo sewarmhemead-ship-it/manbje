@@ -18,6 +18,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { requireCompanyId } from '../common/company-id';
 import { User } from './entities/user.entity';
 import { UserRole } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -33,19 +34,23 @@ export class UsersController {
   @UseGuards(PermissionsGuard)
   @RequirePermission('users_view')
   findAll(
+    @CurrentUser() user: User,
     @Query('role') role?: UserRole,
     @Query('isActive') isActiveStr?: string,
     @Query('search') search?: string,
   ) {
     const isActive = isActiveStr === 'true' ? true : isActiveStr === 'false' ? false : undefined;
-    return this.usersService.findAll({ role, isActive, search });
+    const companyId = user.role !== UserRole.PATIENT ? requireCompanyId(user) : null;
+    return this.usersService.findAll({ companyId, role, isActive, search });
   }
 
   @Post()
   @UseGuards(PermissionsGuard)
   @RequirePermission('users_create')
-  async create(@Body() dto: CreateUserDto) {
+  async create(@Body() dto: CreateUserDto, @CurrentUser() currentUser: User) {
+    const companyId = requireCompanyId(currentUser);
     const { user, tempPassword } = await this.usersService.createUser({
+      companyId,
       email: dto.email,
       password: dto.password,
       role: dto.role,

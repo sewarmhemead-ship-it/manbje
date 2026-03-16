@@ -20,8 +20,9 @@ export class ExercisesService {
     private patientsService: PatientsService,
   ) {}
 
-  async createExercise(dto: CreateExerciseDto): Promise<Exercise> {
+  async createExercise(dto: CreateExerciseDto, companyId: string): Promise<Exercise> {
     const exercise = this.exercisesRepo.create({
+      companyId,
       name: dto.name,
       description: dto.description ?? null,
       videoUrl: dto.videoUrl ?? null,
@@ -30,19 +31,22 @@ export class ExercisesService {
     return this.exercisesRepo.save(exercise);
   }
 
-  async findAllExercises(): Promise<Exercise[]> {
-    return this.exercisesRepo.find({ order: { name: 'ASC' } });
+  async findAllExercises(companyId?: string | null): Promise<Exercise[]> {
+    const where = companyId ? { companyId } : {};
+    return this.exercisesRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async findOneExercise(id: string): Promise<Exercise> {
-    const exercise = await this.exercisesRepo.findOne({ where: { id } });
+  async findOneExercise(id: string, companyId?: string | null): Promise<Exercise> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
+    const exercise = await this.exercisesRepo.findOne({ where });
     if (!exercise) throw new NotFoundException('Exercise not found');
     return exercise;
   }
 
-  async assignToPatient(dto: CreatePatientExerciseDto, assignedBy: string): Promise<PatientExercise> {
-    await this.patientsService.findOne(dto.patientId);
-    await this.findOneExercise(dto.exerciseId);
+  async assignToPatient(dto: CreatePatientExerciseDto, assignedBy: string, companyId: string): Promise<PatientExercise> {
+    await this.patientsService.findOne(dto.patientId, companyId);
+    await this.findOneExercise(dto.exerciseId, companyId);
     const pe = this.patientExercisesRepo.create({
       patientId: dto.patientId,
       exerciseId: dto.exerciseId,

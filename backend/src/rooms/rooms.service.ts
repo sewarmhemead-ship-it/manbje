@@ -12,8 +12,9 @@ export class RoomsService {
     private roomsRepo: Repository<Room>,
   ) {}
 
-  async create(dto: CreateRoomDto): Promise<Room> {
+  async create(dto: CreateRoomDto, companyId: string): Promise<Room> {
     const room = this.roomsRepo.create({
+      companyId,
       roomNumber: dto.roomNumber,
       type: dto.type ?? null,
       isActive: dto.isActive ?? true,
@@ -21,27 +22,32 @@ export class RoomsService {
     return this.roomsRepo.save(room);
   }
 
-  async findAll(activeOnly = false): Promise<Room[]> {
+  async findAll(companyId: string | null, activeOnly = false): Promise<Room[]> {
+    const where: any = {};
+    if (companyId) where.companyId = companyId;
+    if (activeOnly) where.isActive = true;
     return this.roomsRepo.find({
-      where: activeOnly ? { isActive: true } : undefined,
+      where: Object.keys(where).length ? where : undefined,
       order: { roomNumber: 'ASC' },
     });
   }
 
-  async findOne(id: string): Promise<Room> {
-    const room = await this.roomsRepo.findOne({ where: { id } });
+  async findOne(id: string, companyId?: string | null): Promise<Room> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
+    const room = await this.roomsRepo.findOne({ where });
     if (!room) throw new NotFoundException('Room not found');
     return room;
   }
 
-  async update(id: string, dto: UpdateRoomDto): Promise<Room> {
-    const room = await this.findOne(id);
+  async update(id: string, dto: UpdateRoomDto, companyId?: string | null): Promise<Room> {
+    const room = await this.findOne(id, companyId);
     Object.assign(room, dto);
     return this.roomsRepo.save(room);
   }
 
-  async remove(id: string): Promise<void> {
-    const room = await this.findOne(id);
+  async remove(id: string, companyId?: string | null): Promise<void> {
+    const room = await this.findOne(id, companyId);
     await this.roomsRepo.remove(room);
   }
 }

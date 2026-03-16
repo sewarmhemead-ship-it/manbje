@@ -1,0 +1,55 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "save": "Save",
+    "cancel": "Cancel",
+    "language": "Language"
+  },
+  "login": {
+    "title": "Physiotherapy Center",
+    "phone": "Phone number",
+    "password": "Password",
+    "submit": "Sign in",
+    "forgotPassword": "Forgot password?",
+    "errorRequired": "Enter phone and password",
+    "errorFailed": "Login failed"
+  },
+  "tabs": {
+    "home": "Home",
+    "exercises": "My Exercises",
+    "appointments": "My Appointments",
+    "prescriptions": "My Prescriptions",
+    "notifications": "Notifications",
+    "profile": "Profile"
+  },
+  "home": {
+    "welcome": "Welcome",
+    "nextAppointment": "Your next appointment",
+    "noUpcoming": "No upcoming appointment",
+    "todayExercises": "Today's exercises",
+    "done": "done",
+    "recentNotification": "Recent notification",
+    "completedSessions": "Completed sessions"
+  },
+  "exercises": {
+    "title": "My Exercises",
+    "todayProgress": "Your progress today",
+    "noExercises": "No exercises assigned"
+  },
+  "appointments": {
+    "title": "My Appointments",
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "noAppointments": "No appointments"
+  },
+  "prescriptions": {
+    "title": "My Prescriptions",
+    "noPrescriptions": "No prescriptions"
+  },
+  "profile": {
+    "title": "Profile",
+    "logout": "Log out",
+    "language": "Language"
+  }
+}

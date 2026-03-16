@@ -44,17 +44,17 @@ export class AppointmentsService {
     private outboundNotificationsService: OutboundNotificationsService,
   ) {}
 
-  async create(dto: CreateAppointmentDto): Promise<Appointment> {
+  async create(dto: CreateAppointmentDto, companyId: string): Promise<Appointment> {
     const startTime = new Date(dto.startTime);
     const endTime = new Date(dto.endTime);
     if (startTime >= endTime) {
       throw new BadRequestException('startTime must be before endTime');
     }
 
-    await this.roomsService.findOne(dto.roomId);
-    await this.patientsService.findOne(dto.patientId);
+    await this.roomsService.findOne(dto.roomId, companyId);
+    await this.patientsService.findOne(dto.patientId, companyId);
     if (dto.equipmentId) {
-      const eq = await this.equipmentService.findOne(dto.equipmentId);
+      const eq = await this.equipmentService.findOne(dto.equipmentId, companyId);
       if (!eq.isAvailable) {
         throw new ConflictException('Selected equipment is not available');
       }
@@ -119,6 +119,7 @@ export class AppointmentsService {
     }
 
     const appointment = this.appointmentsRepo.create({
+      companyId,
       doctorId: dto.doctorId,
       patientId: dto.patientId,
       roomId: dto.roomId,
@@ -139,6 +140,7 @@ export class AppointmentsService {
         'موعد جديد',
         `تم جدولة موعد جديد للمريض`,
         { appointmentId: saved.id },
+        companyId ?? undefined,
       );
     } catch {
       // ignore
@@ -177,14 +179,17 @@ export class AppointmentsService {
             : dto.mobilityNeed === 'walking'
               ? MobilityNeed.WALKING
               : null;
-      const request = await this.transportRequestsService.create({
-        appointmentId: saved.id,
-        patientId: dto.patientId,
-        pickupAddress: dto.pickupAddress,
-        pickupTime: dto.pickupTime,
-        completionStatus,
-        mobilityNeed: mobilityNeed ?? undefined,
-      });
+      const request = await this.transportRequestsService.create(
+        {
+          appointmentId: saved.id,
+          patientId: dto.patientId,
+          pickupAddress: dto.pickupAddress,
+          pickupTime: dto.pickupTime,
+          completionStatus,
+          mobilityNeed: mobilityNeed ?? undefined,
+        },
+        companyId,
+      );
       saved.transportRequestId = request.id;
       await this.appointmentsRepo.save(saved);
     }
@@ -221,11 +226,13 @@ export class AppointmentsService {
     return count > 0;
   }
 
-  async findAllInRange(startDate: string, endDate: string): Promise<Appointment[]> {
+  async findAllInRange(startDate: string, endDate: string, companyId?: string | null): Promise<Appointment[]> {
     const start = new Date(startDate);
     const end = new Date(endDate);
+    const where: any = { startTime: Between(start, end) };
+    if (companyId) where.companyId = companyId;
     const list = await this.appointmentsRepo.find({
-      where: { startTime: Between(start, end) },
+      where,
       relations: { patient: true, doctor: true, room: true, equipment: true },
       order: { startTime: 'ASC' },
     });
@@ -236,14 +243,14 @@ export class AppointmentsService {
     doctorId: string,
     startDate: string,
     endDate: string,
+    companyId?: string | null,
   ): Promise<Appointment[]> {
     const start = new Date(startDate);
     const end = new Date(endDate);
+    const where: any = { doctorId, startTime: Between(start, end) };
+    if (companyId) where.companyId = companyId;
     const list = await this.appointmentsRepo.find({
-      where: {
-        doctorId,
-        startTime: Between(start, end),
-      },
+      where,
       relations: { patient: true, doctor: true, room: true, equipment: true },
       order: { startTime: 'ASC' },
     });
@@ -308,14 +315,17 @@ export class AppointmentsService {
     if (status === AppointmentStatus.COMPLETED && !wasCompleted) {
       try {
         const patient = await this.patientsService.findOne(appointment.patientId);
-        await this.billingService.createForCompletedAppointment({
-          patientId: appointment.patientId,
-          appointmentId: appointment.id,
-          sessionAmount: 100,
-          hasTransport: !!appointment.transportRequestId,
-          transportAmount: appointment.transportRequestId ? 50 : undefined,
-          insuranceProvider: patient.insuranceCompany ?? null,
-        });
+        const companyId = appointment.companyId ?? undefined;
+        if (companyId) {
+          await this.billingService.createForCompletedAppointment(companyId, {
+            patientId: appointment.patientId,
+            appointmentId: appointment.id,
+            sessionAmount: 100,
+            hasTransport: !!appointment.transportRequestId,
+            transportAmount: appointment.transportRequestId ? 50 : undefined,
+            insuranceProvider: patient.insuranceCompany ?? null,
+          });
+        }
       } catch {
         // Don't fail the status update if invoice creation fails
       }
@@ -323,12 +333,14 @@ export class AppointmentsService {
 
     if (status === AppointmentStatus.CANCELLED) {
       try {
+        const notifCompanyId = appointment.companyId ?? undefined;
         await this.notificationsService.createNotification(
           appointment.doctorId,
           NotificationType.APPOINTMENT_CANCELLED,
           'إلغاء موعد',
           'تم إلغاء موعد',
           { appointmentId: appointment.id },
+          notifCompanyId,
         );
         const patient = await this.patientsService.findOne(appointment.patientId);
         if (patient.userId) {
@@ -338,6 +350,7 @@ export class AppointmentsService {
             'إلغاء موعد',
             'تم إلغاء موعدك',
             { appointmentId: appointment.id },
+            notifCompanyId,
           );
         }
         const vars = await this.outboundNotificationsService.buildVarsForAppointment(

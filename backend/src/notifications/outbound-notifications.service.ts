@@ -16,6 +16,8 @@ import { Patient } from '../patients/entities/patient.entity';
 import { Appointment } from '../appointments/entities/appointment.entity';
 import { TransportRequest } from '../transport/entities/transport-request.entity';
 import { PatientsService } from '../patients/patients.service';
+import { NotificationsService } from './notifications.service';
+import { NotificationType } from './entities/notification.entity';
 
 type SendResult = { success: boolean; externalId?: string; error?: string };
 
@@ -33,6 +35,7 @@ export class OutboundNotificationsService {
     private appointmentRepo: Repository<Appointment>,
     @InjectRepository(TransportRequest)
     private transportRepo: Repository<TransportRequest>,
+    private notificationsService: NotificationsService,
   ) {
     this.initTwilio();
   }
@@ -204,6 +207,16 @@ export class OutboundNotificationsService {
           roomName: (apt.room as { roomNumber?: string })?.roomNumber ?? '',
         },
       }).catch(() => {});
+      if (apt.patient?.userId) {
+        this.notificationsService.createNotification(
+          apt.patient.userId,
+          NotificationType.APPOINTMENT_REMINDER,
+          'تذكير موعد غداً',
+          `موعدك غداً الساعة ${startDate.toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' })} مع ${(apt.doctor as { nameAr?: string })?.nameAr ?? 'الطبيب'}`,
+          { appointmentId: apt.id },
+          (apt as { companyId?: string | null }).companyId ?? undefined,
+        ).catch(() => {});
+      }
     }
 
     for (const apt of appointments2h) {
@@ -228,6 +241,16 @@ export class OutboundNotificationsService {
           doctorName: (apt.doctor as { nameAr?: string })?.nameAr ?? '',
         },
       }).catch(() => {});
+      if (apt.patient?.userId) {
+        this.notificationsService.createNotification(
+          apt.patient.userId,
+          NotificationType.APPOINTMENT_REMINDER,
+          'تذكير موعد بعد ساعتين',
+          `موعدك الساعة ${startDate.toLocaleTimeString('ar-SY', { hour: '2-digit', minute: '2-digit' })} مع ${(apt.doctor as { nameAr?: string })?.nameAr ?? 'الطبيب'}`,
+          { appointmentId: apt.id },
+          (apt as { companyId?: string | null }).companyId ?? undefined,
+        ).catch(() => {});
+      }
     }
   }
 

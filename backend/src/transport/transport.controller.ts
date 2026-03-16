@@ -20,6 +20,7 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { requireCompanyId } from '../common/company-id';
 import { User, UserRole } from '../users/entities/user.entity';
 import { VehicleAccommodationType } from './entities/transport-vehicle.entity';
 
@@ -35,14 +36,16 @@ export class TransportController {
   @Get('vehicles')
   @UseGuards(PermissionsGuard)
   @RequirePermission('transport_manage')
-  getVehicles() {
-    return this.vehiclesService.findAll();
+  getVehicles(@CurrentUser() user: User) {
+    const companyId = requireCompanyId(user);
+    return this.vehiclesService.findAll(companyId);
   }
 
   @Post('vehicles')
   @UseGuards(PermissionsGuard)
   @RequirePermission('transport_manage')
   createVehicle(
+    @CurrentUser() user: User,
     @Body()
     body: {
       plateNumber: string;
@@ -51,7 +54,7 @@ export class TransportController {
       capacity?: number;
     },
   ) {
-    return this.vehiclesService.create(body);
+    return this.vehiclesService.create(requireCompanyId(user), body);
   }
 
   @Patch('vehicles/:id')
@@ -64,24 +67,27 @@ export class TransportController {
       accommodationType?: VehicleAccommodationType;
       capacity?: number;
     },
+    @CurrentUser() user: User,
   ) {
-    return this.vehiclesService.update(id, body);
+    return this.vehiclesService.update(id, body, requireCompanyId(user));
   }
 
   @Get('drivers')
   @UseGuards(PermissionsGuard)
   @RequirePermission('transport_view')
-  getDrivers() {
-    return this.driversService.findAll();
+  getDrivers(@CurrentUser() user: User) {
+    const companyId = requireCompanyId(user);
+    return this.driversService.findAll(companyId);
   }
 
   @Post('drivers')
   @UseGuards(PermissionsGuard)
   @RequirePermission('transport_manage')
   createDriver(
+    @CurrentUser() user: User,
     @Body() body: { userId: string; vehicleId?: string; licenseNumber?: string },
   ) {
-    return this.driversService.create(body);
+    return this.driversService.create(requireCompanyId(user), body);
   }
 
   @Get('drivers/me')
@@ -101,11 +107,12 @@ export class TransportController {
     @Body() body: { isAvailable: boolean },
     @CurrentUser() user: User,
   ) {
+    const companyId = user.role === UserRole.DRIVER ? null : requireCompanyId(user);
     if (user.role === UserRole.DRIVER) {
       const me = await this.driversService.findByUserId(user.id);
       if (!me || me.id !== id) throw new ForbiddenException('You can only update your own availability');
     }
-    return this.driversService.setAvailability(id, body.isAvailable);
+    return this.driversService.setAvailability(id, body.isAvailable, companyId);
   }
 
   @Get('requests')
@@ -115,16 +122,16 @@ export class TransportController {
     if (user.role === UserRole.DRIVER) {
       const driver = await this.driversService.findByUserId(user.id);
       if (!driver) return [];
-      return this.requestsService.findAll(driver.id);
+      return this.requestsService.findAll(null, driver.id);
     }
-    return this.requestsService.findAll();
+    return this.requestsService.findAll(requireCompanyId(user));
   }
 
   @Post('requests')
   @UseGuards(PermissionsGuard)
   @RequirePermission('transport_manage')
-  createRequest(@Body() dto: CreateTransportRequestDto) {
-    return this.requestsService.create(dto);
+  createRequest(@Body() dto: CreateTransportRequestDto, @CurrentUser() user: User) {
+    return this.requestsService.create(dto, requireCompanyId(user));
   }
 
   @Get('requests/:id')
@@ -134,7 +141,8 @@ export class TransportController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: User,
   ) {
-    const request = await this.requestsService.findOne(id);
+    const companyId = user.role === UserRole.DRIVER ? null : requireCompanyId(user);
+    const request = await this.requestsService.findOne(id, companyId ?? undefined);
     if (user.role === UserRole.DRIVER) {
       const driver = await this.driversService.findByUserId(user.id);
       if (!driver || request.driverId !== driver.id) {
@@ -150,8 +158,10 @@ export class TransportController {
   updateRequestStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateTransportStatusDto,
+    @CurrentUser() user: User,
   ) {
-    return this.requestsService.updateStatus(id, dto.status);
+    const companyId = user.role === UserRole.DRIVER ? undefined : requireCompanyId(user);
+    return this.requestsService.updateStatus(id, dto.status, companyId);
   }
 
   @Patch('requests/:id/assign')
@@ -160,11 +170,13 @@ export class TransportController {
   assignDriver(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { driverId: string; vehicleId: string },
+    @CurrentUser() user: User,
   ) {
     return this.requestsService.assignDriverAndVehicle(
       id,
       body.driverId,
       body.vehicleId,
+      requireCompanyId(user),
     );
   }
 }

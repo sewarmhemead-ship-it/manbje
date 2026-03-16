@@ -20,8 +20,10 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermission } from '../auth/decorators/permission.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { requireCompanyId } from '../common/company-id';
 import { User, UserRole } from '../users/entities/user.entity';
 import { PatientsService } from '../patients/patients.service';
+import { AuditService } from '../audit/audit.service';
 
 @Controller('appointments')
 @UseGuards(JwtAuthGuard)
@@ -29,13 +31,24 @@ export class AppointmentsController {
   constructor(
     private appointmentsService: AppointmentsService,
     private patientsService: PatientsService,
+    private auditService: AuditService,
   ) {}
 
   @Post()
   @UseGuards(PermissionsGuard)
   @RequirePermission('appointments_create')
-  create(@Body() dto: CreateAppointmentDto) {
-    return this.appointmentsService.create(dto);
+  async create(@Body() dto: CreateAppointmentDto, @CurrentUser() user: User) {
+    const companyId = requireCompanyId(user);
+    const appointment = await this.appointmentsService.create(dto, companyId);
+    await this.auditService.log({
+      userId: user.id,
+      companyId,
+      action: 'create',
+      entityType: 'appointment',
+      entityId: appointment.id,
+      details: { patientId: dto.patientId, startTime: appointment.startTime },
+    });
+    return appointment;
   }
 
   @Get()
@@ -49,10 +62,11 @@ export class AppointmentsController {
     if (!startDate || !endDate) {
       throw new BadRequestException('startDate and endDate are required');
     }
+    const companyId = requireCompanyId(user);
     if (user.role === UserRole.DOCTOR) {
-      return this.appointmentsService.findByDoctor(user.id, startDate, endDate);
+      return this.appointmentsService.findByDoctor(user.id, startDate, endDate, companyId);
     }
-    return this.appointmentsService.findAllInRange(startDate, endDate);
+    return this.appointmentsService.findAllInRange(startDate, endDate, companyId);
   }
 
   @Get('doctor/:doctorId')
@@ -67,9 +81,10 @@ export class AppointmentsController {
     if (user.role === UserRole.DOCTOR && doctorId !== user.id) {
       throw new ForbiddenException('You can only view your own schedule');
     }
+    const companyId = requireCompanyId(user);
     const start = startDate || new Date().toISOString().slice(0, 10);
     const end = endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    return this.appointmentsService.findByDoctor(doctorId, start, end);
+    return this.appointmentsService.findByDoctor(doctorId, start, end, companyId);
   }
 
   @Get('patient/:patientId')
@@ -113,11 +128,21 @@ export class AppointmentsController {
   @Patch(':id/status')
   @UseGuards(PermissionsGuard)
   @RequirePermission('appointments_edit')
-  updateStatus(
+  async updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAppointmentStatusDto,
+    @CurrentUser() user: User,
   ) {
-    return this.appointmentsService.updateStatus(id, dto.status);
+    const appointment = await this.appointmentsService.updateStatus(id, dto.status);
+    await this.auditService.log({
+      userId: user.id,
+      companyId: appointment.companyId ?? null,
+      action: 'update_status',
+      entityType: 'appointment',
+      entityId: id,
+      details: { status: dto.status },
+    });
+    return appointment;
   }
 
   @Patch(':id/rating')

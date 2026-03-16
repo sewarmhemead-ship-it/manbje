@@ -10,6 +10,7 @@ import {
 import { Patient } from '../../patients/entities/patient.entity';
 import { TransportDriver } from './transport-driver.entity';
 import { TransportVehicle } from './transport-vehicle.entity';
+import { Company } from '../../companies/entities/company.entity';
 
 export enum TransportCompletionStatus {
   TO_CENTER_ONLY = 'to_center_only',
@@ -37,6 +38,13 @@ export enum MobilityNeed {
 export class TransportRequest {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 
   @Column({ name: 'appointment_id', type: 'uuid', nullable: true })
   appointmentId: string | null;

@@ -1,6 +1,9 @@
+import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ToastProvider } from '@/lib/toast';
+import { isRtl } from '@/lib/i18n';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { UnauthorizedCardByRole } from '@/components/UnauthorizedCard';
@@ -16,6 +19,7 @@ import { Reports } from '@/pages/Reports';
 import { Notifications } from '@/pages/Notifications';
 import { Prescriptions } from '@/pages/Prescriptions';
 import { Settings } from '@/pages/Settings';
+import { AuditLogPage } from '@/pages/AuditLog';
 import { Users } from '@/pages/Users';
 import { DriverPortal } from '@/pages/DriverPortal';
 import { ReceptionistPortal } from '@/pages/ReceptionistPortal';
@@ -54,6 +58,7 @@ function AppRoutesInner() {
         <Route path="prescriptions" element={<ProtectedRoute permission="prescriptions_view" fallback={<UnauthorizedCardByRole />}><Prescriptions /></ProtectedRoute>} />
         <Route path="billing" element={<ProtectedRoute permission="billing_view" fallback={<UnauthorizedCardByRole />}><Placeholder /></ProtectedRoute>} />
         <Route path="users" element={<ProtectedRoute permission="users_view" fallback={<UnauthorizedCardByRole />}><Users /></ProtectedRoute>} />
+        <Route path="audit-log" element={<ProtectedRoute permission="settings_view"><AuditLogPage /></ProtectedRoute>} />
         <Route path="settings" element={<ProtectedRoute permission="settings_view"><Settings /></ProtectedRoute>} />
         <Route path="receptionist" element={<ProtectedRoute permission="receptionist_portal"><ReceptionistPortal /></ProtectedRoute>} />
         <Route path="doctor-portal" element={<ProtectedRoute permission="doctor_portal"><DoctorPortal /></ProtectedRoute>} />
@@ -64,11 +69,22 @@ function AppRoutesInner() {
   );
 }
 
+function DirSync() {
+  const { i18n } = useTranslation();
+  useEffect(() => {
+    const lng = i18n.language?.startsWith('ar') ? 'ar' : 'en';
+    document.documentElement.lang = lng;
+    document.documentElement.dir = isRtl(lng) ? 'rtl' : 'ltr';
+  }, [i18n.language]);
+  return null;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
+          <DirSync />
           <AppRoutesInner />
         </ToastProvider>
       </AuthProvider>

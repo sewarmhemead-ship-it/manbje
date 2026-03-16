@@ -6,6 +6,7 @@ import { User } from './entities/user.entity';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 export interface CreateUserData {
+  companyId?: string | null;
   email: string;
   passwordHash: string;
   role: User['role'];
@@ -23,12 +24,13 @@ export class UsersService {
   ) {}
 
   async create(data: CreateUserData): Promise<User> {
-    const user = this.usersRepo.create(data);
+    const user = this.usersRepo.create(data as Partial<User>);
     return this.usersRepo.save(user);
   }
 
   /** Admin creates staff: auto temp password = last 4 digits of phone if password not provided. */
   async createUser(dto: {
+    companyId: string;
     email: string;
     password?: string;
     role: User['role'];
@@ -45,6 +47,7 @@ export class UsersService {
         : (dto.phone ?? '').replace(/\D/g, '').slice(-4).padStart(4, '0') || '0000';
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     const user = await this.create({
+      companyId: dto.companyId,
       email: dto.email.toLowerCase(),
       passwordHash,
       role: dto.role,
@@ -113,10 +116,11 @@ export class UsersService {
     await this.usersRepo.update(id, { lastLoginAt: new Date() });
   }
 
-  async findAll(filters: { role?: User['role']; isActive?: boolean; search?: string } = {}): Promise<User[]> {
+  async findAll(filters: { companyId?: string | null; role?: User['role']; isActive?: boolean; search?: string } = {}): Promise<User[]> {
     const qb = this.usersRepo
       .createQueryBuilder('u')
       .orderBy('u.created_at', 'DESC');
+    if (filters.companyId) qb.andWhere('u.company_id = :companyId', { companyId: filters.companyId });
     if (filters.role) qb.andWhere('u.role = :role', { role: filters.role });
     if (filters.isActive !== undefined) qb.andWhere('u.is_active = :isActive', { isActive: filters.isActive });
     if (filters.search?.trim()) {

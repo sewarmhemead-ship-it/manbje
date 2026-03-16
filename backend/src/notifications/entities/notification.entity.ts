@@ -7,6 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Company } from '../../companies/entities/company.entity';
 
 export enum NotificationType {
   APPOINTMENT_NEW = 'appointment_new',
@@ -24,6 +25,13 @@ export enum NotificationType {
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 
   @Column({ name: 'user_id', type: 'uuid' })
   userId: string;

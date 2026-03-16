@@ -8,12 +8,20 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Company } from '../../companies/entities/company.entity';
 
 /** يوم الأسبوع: 0 = الأحد، 1 = الاثنين، ... 6 = السبت */
 @Entity('schedules')
 export class Schedule {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ name: 'company_id', type: 'uuid', nullable: true })
+  companyId: string | null;
+
+  @ManyToOne(() => Company, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 
   @Column({ name: 'doctor_id', type: 'uuid' })
   doctorId: string;

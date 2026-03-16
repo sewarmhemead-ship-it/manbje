@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { APP_GUARD } from '@nestjs/core';
+import { CompaniesModule } from './companies/companies.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { PatientsModule } from './patients/patients.module';
@@ -19,6 +20,8 @@ import { BillingModule } from './billing/billing.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrescriptionsModule } from './prescriptions/prescriptions.module';
 import { VitalsModule } from './vitals/vitals.module';
+import { HealthModule } from './health/health.module';
+import { AuditModule } from './audit/audit.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 @Module({
@@ -43,6 +46,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
       autoLoadEntities: true,
       synchronize: true, // للتطوير فقط
     }),
+    CompaniesModule,
     AuthModule,
     UsersModule,
     PatientsModule,
@@ -59,6 +63,8 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
     NotificationsModule,
     PrescriptionsModule,
     VitalsModule,
+    HealthModule,
+    AuditModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

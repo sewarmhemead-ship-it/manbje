@@ -20,8 +20,9 @@ import type { Appointment } from '@/lib/api';
 import { getTransportRequests } from '@/lib/api-dashboard';
 import { MOCK_APPOINTMENTS, MOCK_DASHBOARD_STATS, isDemoMode } from '@/lib/mock-data';
 import { SkeletonKPI, SkeletonCard } from '@/components/ui/Skeleton';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { EmptyState, ErrorState } from '@/components/ui/EmptyState';
 import { Avatar } from '@/components/ui/Avatar';
+import { useTranslation } from 'react-i18next';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
 const BG = '#06080e';
@@ -72,6 +73,7 @@ interface ReportStatsDay {
 }
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const { user, isRole } = useAuth();
   const navigate = useNavigate();
   const isAdmin = isRole('admin');
@@ -80,6 +82,7 @@ export function Dashboard() {
   const isNurse = isRole('nurse');
   const alertsRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [stats, setStats] = useState({
     todayAppointments: 0,
     inTransit: 0,
@@ -103,6 +106,7 @@ export function Dashboard() {
   const [adminRooms, setAdminRooms] = useState({ occupied: 0, total: 0 });
   const [adminVehicles, setAdminVehicles] = useState({ active: 0, total: 0 });
   const [adminLast7DaysCounts, setAdminLast7DaysCounts] = useState<number[]>([]);
+  const [adminSessionsByDay, setAdminSessionsByDay] = useState<{ date: string; count: number }[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminNewPatientsToday, setAdminNewPatientsToday] = useState(0);
   const [clock, setClock] = useState(() => new Date());
@@ -114,6 +118,7 @@ export function Dashboard() {
       setLoading(false);
       return;
     }
+    setLoadError(false);
     try {
       const doctorId = isAdmin ? undefined : user?.id;
       const start = todayStart();
@@ -155,6 +160,7 @@ export function Dashboard() {
       setLiveAppointments(appointments);
     } catch {
       setLiveAppointments([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -180,12 +186,16 @@ export function Dashboard() {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
     const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13);
+    const fourteenDaysAgoStr = fourteenDaysAgo.toISOString().slice(0, 10);
     try {
       const [
         statsTodayRes,
         statsYesterdayRes,
         statsLastMonthRes,
         statsLast7Res,
+        sessionsByDayRes,
         patientsRes,
         appointmentsRes,
         transportRes,
@@ -199,6 +209,7 @@ export function Dashboard() {
         apiGet<ReportStatsDay>(`/reports/stats?startDate=${yStart}&endDate=${yEnd}`).catch(() => null),
         apiGet<ReportStatsDay>(`/reports/stats?startDate=${lastMonthStartStr}&endDate=${lastMonthEndStr}`).catch(() => null),
         apiGet<ReportStatsDay>(`/reports/stats?startDate=${sevenDaysAgoStr}&endDate=${end}`).catch(() => null),
+        apiGet<{ date: string; count: number }[]>(`/reports/sessions-by-day?startDate=${fourteenDaysAgoStr}&endDate=${end}`).catch(() => []),
         apiGet<{ id: string; createdAt?: string }[]>(`/patients`).catch(() => []),
         apiGet<Appointment[]>(`/appointments?startDate=${start}&endDate=${end}`).catch(() => []),
         apiGet<{ id: string; status: string; createdAt?: string; patient?: { nameAr?: string } }[]>(`/transport/requests`).catch(() => []),
@@ -249,6 +260,7 @@ export function Dashboard() {
       } else {
         setAdminLast7DaysCounts([]);
       }
+      setAdminSessionsByDay(Array.isArray(sessionsByDayRes) ? sessionsByDayRes : []);
     } catch {
       // keep previous state
     } finally {
@@ -287,7 +299,7 @@ export function Dashboard() {
 
   const scrollToAlerts = () => alertsRef.current?.scrollIntoView({ behavior: 'smooth' });
 
-  if (loading && !isAdmin) {
+  if (loading && !isAdmin && !loadError) {
     return (
       <div className="space-y-6" style={{ background: BG }}>
         <SkeletonKPI count={4} />
@@ -295,6 +307,19 @@ export function Dashboard() {
           <SkeletonCard />
           <SkeletonCard />
         </div>
+      </div>
+    );
+  }
+
+  if (loadError && !isAdmin) {
+    return (
+      <div className="space-y-6" style={{ background: BG }}>
+        <h1 className="text-3xl font-bold tracking-tight" style={textMain}>{t('dashboard.title')}</h1>
+        <ErrorState
+          title={t('dashboard.errorLoading')}
+          onRetry={() => { setLoading(true); load(); }}
+          retryLabel={t('dashboard.retry')}
+        />
       </div>
     );
   }
@@ -448,14 +473,24 @@ return (
           ))}
         </div>
 
+        {/* Sessions by day chart */}
+        <Card style={cardStyle}>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium" style={textMain}>{t('dashboard.sessionsChart')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SessionsByDayChart data={adminSessionsByDay} accent={CYAN} />
+          </CardContent>
+        </Card>
+
         {/* Main 2-column */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Left — مواعيد الآن */}
           <Card style={cardStyle}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium" style={textMain}>مواعيد الآن</CardTitle>
+              <CardTitle className="text-sm font-medium" style={textMain}>{t('dashboard.appointmentsNow')}</CardTitle>
               <button type="button" onClick={() => navigate('/appointments')} className="text-xs text-cyan-400 hover:underline">
-                عرض الكل
+                {t('dashboard.viewAll')}
               </button>
             </CardHeader>
             <CardContent>
@@ -471,7 +506,7 @@ return (
                     (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
                   ).slice(0, 5);
                   return sorted.length === 0 ? (
-                    <EmptyState icon="📅" title="لا مواعيد لهذا اليوم" />
+                    <EmptyState icon="📅" title={t('dashboard.noAppointmentsToday')} />
                   ) : (
                     <ul className="space-y-2">
                       {sorted.map((a) => (
@@ -556,16 +591,16 @@ return (
   return (
     <div className="page-enter space-y-8 transition-opacity duration-300" style={{ background: BG }}>
       <div>
-        <h1 className="text-3xl font-bold tracking-tight" style={textMain}>لوحة التحكم</h1>
+        <h1 className="text-3xl font-bold tracking-tight" style={textMain}>{t('dashboard.title')}</h1>
         <p className="mt-1" style={textMuted}>
-          نظرة عامة على النشاط والمواعيد والنقل
+          {t('dashboard.subtitle')}
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="overflow-hidden transition-all duration-200" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium" style={textMuted}>مواعيد اليوم</CardTitle>
+            <CardTitle className="text-sm font-medium" style={textMuted}>{t('dashboard.todayAppointments')}</CardTitle>
             <Calendar className="h-5 w-5" style={textMuted} />
           </CardHeader>
           <CardContent>
@@ -574,7 +609,7 @@ return (
         </Card>
         <Card className="overflow-hidden transition-all duration-200" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium" style={textMuted}>قيد النقل</CardTitle>
+            <CardTitle className="text-sm font-medium" style={textMuted}>{t('dashboard.inTransit')}</CardTitle>
             <Truck className="h-5 w-5" style={textMuted} />
           </CardHeader>
           <CardContent>
@@ -583,7 +618,7 @@ return (
         </Card>
         <Card className="overflow-hidden transition-all duration-200" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium" style={textMuted}>جلسات نشطة</CardTitle>
+            <CardTitle className="text-sm font-medium" style={textMuted}>{t('dashboard.activeSessions')}</CardTitle>
             <Activity className="h-5 w-5" style={textMuted} />
           </CardHeader>
           <CardContent>
@@ -592,7 +627,7 @@ return (
         </Card>
         <Card className="overflow-hidden transition-all duration-200" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium" style={textMuted}>إيرادات الأسبوع</CardTitle>
+            <CardTitle className="text-sm font-medium" style={textMuted}>{t('dashboard.weeklyRevenue')}</CardTitle>
             <DollarSign className="h-5 w-5" style={textMuted} />
           </CardHeader>
           <CardContent>
@@ -605,18 +640,18 @@ return (
         <Card className="lg:col-span-2" style={cardStyle}>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle style={textMain}>الحالة المباشرة</CardTitle>
+              <CardTitle style={textMain}>{t('dashboard.liveStatus')}</CardTitle>
               <p className="text-sm" style={textMuted}>
-                المرضى القادمون اليوم — نقل المركز أو ذاتي
+                {t('dashboard.liveStatusSub')}
               </p>
             </div>
             <span className="text-xs" style={textMuted}>
-              آخر تحديث: {lastUpdateSeconds} ثانية
+              {t('dashboard.lastUpdate')}: {t('dashboard.secondsAgo', { count: lastUpdateSeconds })}
             </span>
           </CardHeader>
           <CardContent>
             {liveAppointments.length === 0 ? (
-              <EmptyState icon="📅" title="لا مواعيد لهذا اليوم" />
+              <EmptyState icon="📅" title={t('dashboard.noAppointmentsToday')} />
             ) : (
               <div className="overflow-x-auto rounded-xl border" style={{ borderColor: BORDER }}>
                 <table className="w-full text-sm">
@@ -704,7 +739,7 @@ return (
 
         <Card style={cardStyle}>
           <CardHeader>
-            <CardTitle style={textMain}>إجراءات سريعة</CardTitle>
+            <CardTitle style={textMain}>{t('dashboard.quickActions')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {[
@@ -784,6 +819,40 @@ function AdminKPICard({
             );
           })}
         </svg>
+      )}
+    </div>
+  );
+}
+
+function SessionsByDayChart({ data, accent }: { data: { date: string; count: number }[]; accent: string }) {
+  const MUTED = '#4b5875';
+  const TEXT = '#dde6f5';
+  const maxCount = Math.max(1, ...data.map((d) => d.count));
+  const barHeight = 24;
+  return (
+    <div className="space-y-2">
+      {data.length === 0 ? (
+        <p className="py-6 text-center text-sm" style={{ color: MUTED }}>لا بيانات للفترة المحددة</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {data.map((d) => {
+            const w = maxCount ? (d.count / maxCount) * 100 : 0;
+            return (
+              <div key={d.date} className="flex items-center gap-3">
+                <span className="w-24 shrink-0 text-xs font-medium" style={{ color: MUTED }}>
+                  {new Date(d.date).toLocaleDateString('ar-SA', { month: 'short', day: 'numeric' })}
+                </span>
+                <div className="h-6 flex-1 overflow-hidden rounded-md bg-white/5">
+                  <div
+                    className="h-full rounded-md transition-all duration-300"
+                    style={{ width: `${w}%`, backgroundColor: accent, minWidth: d.count ? 4 : 0 }}
+                  />
+                </div>
+                <span className="w-8 shrink-0 text-right font-mono text-xs" style={{ color: TEXT }}>{d.count}</span>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

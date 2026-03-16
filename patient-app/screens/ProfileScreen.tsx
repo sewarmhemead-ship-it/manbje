@@ -10,10 +10,12 @@ import {
   Alert,
   Switch,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
+import { setLanguage, SUPPORTED_LANGUAGES } from '../lib/i18n';
 import { C, radius, fontMono } from '../constants/theme';
 import {
   getPatientProfile,
@@ -37,7 +39,9 @@ function maskPhone(phone: string | undefined): string {
 }
 
 export function ProfileScreen({ navigation }: { navigation: { navigate: (a: string) => void } }) {
+  const { t, i18n } = useTranslation();
   const { patient, logout } = useAuth();
+  const currentLang = i18n.language?.startsWith('ar') ? 'ar' : 'en';
   const [profile, setProfile] = useState<Patient & { address?: string | null; diagnosis?: string | null } | null>(null);
   const [completedCount, setCompletedCount] = useState(0);
   const [todayExercises, setTodayExercises] = useState(0);
@@ -103,13 +107,12 @@ export function ProfileScreen({ navigation }: { navigation: { navigate: (a: stri
 
   const handleLogout = () => {
     Alert.alert(
-      'تسجيل الخروج',
-      'هل تريد تسجيل الخروج؟',
+      t('profile.logout'),
+      currentLang === 'ar' ? 'هل تريد تسجيل الخروج؟' : 'Do you want to log out?',
       [
-        { text: 'تراجع', style: 'cancel' },
-        { text: 'تسجيل الخروج', style: 'destructive', onPress: async () => {
+        { text: currentLang === 'ar' ? 'تراجع' : 'Cancel', style: 'cancel' },
+        { text: t('profile.logout'), style: 'destructive', onPress: async () => {
           await logout();
-          // Navigation to login is handled by AppContent when token is cleared
         } },
       ]
     );
@@ -183,18 +186,32 @@ export function ProfileScreen({ navigation }: { navigation: { navigate: (a: stri
             <Text style={styles.rowText}>المظهر</Text>
             <Switch value={darkMode} onValueChange={toggleTheme} trackColor={{ false: C.muted, true: C.cyan }} thumbColor={C.text} />
           </View>
-          <View style={styles.row}><Text style={styles.rowIcon}>🌐</Text><Text style={styles.rowText}>اللغة: عربي</Text></View>
+          <View style={styles.row}>
+            <Text style={styles.rowIcon}>🌐</Text>
+            <Text style={styles.rowText}>{t('profile.language')}</Text>
+            <View style={{ flexDirection: 'row', marginRight: 'auto' }}>
+              {SUPPORTED_LANGUAGES.map((lng) => (
+                <TouchableOpacity
+                  key={lng}
+                  onPress={() => setLanguage(lng)}
+                  style={[styles.langBtn, currentLang === lng && styles.langBtnActive]}
+                >
+                  <Text style={[styles.langBtnText, currentLang === lng && styles.langBtnTextActive]}>{lng === 'ar' ? 'ع' : 'EN'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>الحساب</Text>
+          <Text style={styles.sectionTitle}>{currentLang === 'ar' ? 'الحساب' : 'Account'}</Text>
           <TouchableOpacity style={styles.row} onPress={() => setPasswordModal(true)}>
             <Text style={styles.rowIcon}>🔑</Text>
-            <Text style={styles.rowText}>تغيير كلمة المرور</Text>
+            <Text style={styles.rowText}>{currentLang === 'ar' ? 'تغيير كلمة المرور' : 'Change password'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.row} onPress={handleLogout}>
             <Text style={styles.rowIcon}>🚪</Text>
-            <Text style={[styles.rowText, { color: C.red }]}>تسجيل الخروج</Text>
+            <Text style={[styles.rowText, { color: C.red }]}>{t('profile.logout')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -253,4 +270,8 @@ const styles = StyleSheet.create({
   modalBtnCancelText: { color: C.muted },
   modalBtnOk: { paddingVertical: 10, paddingHorizontal: 16, backgroundColor: C.cyan, borderRadius: radius.button },
   modalBtnOkText: { color: C.bg, fontWeight: '600' },
+  langBtn: { marginLeft: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: C.bg },
+  langBtnActive: { backgroundColor: C.cyan },
+  langBtnText: { color: C.muted, fontWeight: '600', fontSize: 14 },
+  langBtnTextActive: { color: C.bg },
 });

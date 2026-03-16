@@ -6,6 +6,7 @@ import { PatientsController } from './patients.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ClinicalSessionsModule } from '../clinical-sessions/clinical-sessions.module';
 import { ExercisesModule } from '../exercises/exercises.module';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { ExercisesModule } from '../exercises/exercises.module';
     forwardRef(() => AuthModule),
     ClinicalSessionsModule,
     forwardRef(() => ExercisesModule),
+    AuditModule,
   ],
   providers: [PatientsService],
   controllers: [PatientsController],

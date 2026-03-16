@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { initI18n } from './lib/i18n';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginScreen } from './screens/LoginScreen';
 import { MainTabs } from './navigation/MainTabs';
@@ -14,19 +15,24 @@ SplashScreen.preventAutoHideAsync();
 function AppContent() {
   const { ready, token, patient, login, logout } = useAuth();
   const [fontsLoaded, setFontsLoaded] = useState(true);
+  const [i18nReady, setI18nReady] = useState(false);
+
+  useEffect(() => {
+    initI18n().then(() => setI18nReady(true));
+  }, []);
 
   useEffect(() => {
     setOnUnauthorized(logout);
   }, [logout]);
 
   useEffect(() => {
-    if (ready && fontsLoaded) SplashScreen.hideAsync();
-  }, [ready, fontsLoaded]);
+    if (ready && fontsLoaded && i18nReady) SplashScreen.hideAsync();
+  }, [ready, fontsLoaded, i18nReady]);
 
-  if (!ready || !fontsLoaded) {
+  if (!ready || !fontsLoaded || !i18nReady) {
     return (
       <View style={styles.splash}>
-        <Text style={styles.splashText}>مركز العلاج الفيزيائي</Text>
+        <Text style={styles.splashText}>PhysioCore</Text>
       </View>
     );
   }

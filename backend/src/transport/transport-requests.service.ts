@@ -37,7 +37,7 @@ export class TransportRequestsService {
     private outboundNotificationsService: OutboundNotificationsService,
   ) {}
 
-  async create(dto: CreateTransportRequestDto): Promise<TransportRequest> {
+  async create(dto: CreateTransportRequestDto, companyId: string): Promise<TransportRequest> {
     if (dto.appointmentId) {
       const existing = await this.requestsRepo.findOne({
         where: { appointmentId: dto.appointmentId },
@@ -47,6 +47,7 @@ export class TransportRequestsService {
       }
     }
     const request = this.requestsRepo.create({
+      companyId: companyId!,
       appointmentId: dto.appointmentId ?? null,
       patientId: dto.patientId,
       pickupAddress: dto.pickupAddress,
@@ -58,10 +59,11 @@ export class TransportRequestsService {
     return this.requestsRepo.save(request);
   }
 
-  async findAll(driverId?: string): Promise<TransportRequest[]> {
-    const where = driverId ? { driverId } : {};
+  async findAll(companyId?: string | null, driverId?: string): Promise<TransportRequest[]> {
+    const where: any = driverId ? { driverId } : {};
+    if (!driverId && companyId) where.companyId = companyId;
     return this.requestsRepo.find({
-      where,
+      where: Object.keys(where).length ? where : {},
       relations: {
         patient: { user: true },
         driver: { user: true, vehicle: true },
@@ -92,9 +94,11 @@ export class TransportRequestsService {
     return map;
   }
 
-  async findOne(id: string): Promise<TransportRequest> {
+  async findOne(id: string, companyId?: string | null): Promise<TransportRequest> {
+    const where: any = { id };
+    if (companyId) where.companyId = companyId;
     const request = await this.requestsRepo.findOne({
-      where: { id },
+      where,
       relations: { driver: true, vehicle: true, patient: true },
     });
     if (!request) throw new NotFoundException('Transport request not found');
@@ -104,8 +108,9 @@ export class TransportRequestsService {
   async updateStatus(
     id: string,
     status: TransportRequestStatus,
+    companyId?: string | null,
   ): Promise<TransportRequest> {
-    const request = await this.findOne(id);
+    const request = await this.findOne(id, companyId);
     request.status = status;
     if (status === TransportRequestStatus.ARRIVED_AT_CENTER) {
       request.arrivedAtCenter = new Date();
@@ -128,6 +133,7 @@ export class TransportRequestsService {
             'وصول النقل',
             'المريض وصل إلى المركز عبر خدمة النقل',
             { transportRequestId: id, appointmentId: request.appointmentId },
+            request.companyId ?? undefined,
           );
         }
         const vars = await this.outboundNotificationsService.buildVarsForTransport(id);
@@ -151,8 +157,9 @@ export class TransportRequestsService {
     id: string,
     driverId: string,
     vehicleId: string,
+    companyId?: string | null,
   ): Promise<TransportRequest> {
-    const request = await this.findOne(id);
+    const request = await this.findOne(id, companyId);
     if (request.status !== TransportRequestStatus.REQUESTED) {
       throw new BadRequestException('Can only assign driver/vehicle to requested trips');
     }
@@ -169,6 +176,7 @@ export class TransportRequestsService {
           'تم تعيينك لرحلة',
           'تم تعيينك لرحلة نقل مريض',
           { transportRequestId: id },
+          request.companyId ?? companyId ?? undefined,
         );
       }
       const vars = await this.outboundNotificationsService.buildVarsForTransport(id);
